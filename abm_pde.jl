@@ -119,12 +119,13 @@ function f(duz,uz,p,t)
     dz_2 = @view dz[:,2]
 
     rho = rho_1 + rho_2
-    force_1 = c * media_force(z_1, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, W_matrix, dV)
-    force_2 = c * media_force(z_2, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, W_matrix, dV)
-    div_1 = rho_1 .* (C*force_1[:,:,1] + force_1[:,:,2]*C') + (Cr*rho_1)*force_1[:,:,1]+ (rho_1*Cr')*force_1[:,:,2]
-    div_2 = rho_2 .* (C*force_2[:,:,1] + force_2[:,:,2]*C') + (Cr*rho_2)*force_2[:,:,1]+ (rho_2*Cr')*force_2[:,:,2]
-    drho_1 .= D*(M*rho_1 + rho_1*M') - div_1
-    drho_2 .= D*(M*rho_2 + rho_2*M') - div_2
+    af =  a * agent_force(rho, K_matrix, W_matrix, dV)
+    force_1 = c * media_force(z_1, grid_points, N_x, N_y) + af 
+    force_2 = c * media_force(z_2, grid_points, N_x, N_y) + af 
+    div_1 = rho_1 .* (C*force_1[:,:,1] + force_1[:,:,2]*C') + (Cr * rho_1) .* force_1[:,:,1]+ (rho_1*Cr') .* force_1[:,:,2]
+    div_2 = rho_2 .* (C*force_2[:,:,1] + force_2[:,:,2]*C') + (Cr * rho_2) .* force_2[:,:,1]+ (rho_2 * Cr') .* force_2[:,:,2]
+    drho_1 .= D * (M*rho_1 + rho_1*M') - div_1
+    drho_2 .= D * (M*rho_2 + rho_2*M') - div_2
     mean_rho_1 = 1/m_1 * reshape(rho_1,1,N)*grid_points
     mean_rho_2 = 1/m_2 * reshape(rho_2,1,N)*grid_points
     dz_1 .= 1/(Gamma_0*m_1) * (mean_rho_1' - z_1)
