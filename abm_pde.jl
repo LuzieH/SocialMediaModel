@@ -29,7 +29,7 @@ function agent_force(rho, K_matrix, dV)
     return force
 end
 
-function run()
+function construct()
     # Define the constants for the PDE
     sigma = 1.0
     D = sigma^2 * 0.5
@@ -52,12 +52,7 @@ function run()
     # matrix of K evaluated at gridpoints
     K_matrix  = generate_K(N, grid_points)
     
-    # Define the initial condition as normal arrays
-    rho_0 = cat(1/32*ones(N_y,N_x), 1/32*ones(N_y,N_x), dims=3)
-    u0 = rho_0
-    z1_0 = [1.,1.]
-    z2_0 = [-1.,-1.]
-    z0 = [z1_0  z2_0]
+
     m_1 = 1/2 #proportion of agents of type 1,2
     m_2 = 1/2 
 
@@ -133,23 +128,37 @@ function run()
         dz_2 .= 1/(Gamma_0*m_2) * (mean_rho_2' - z_2)
     end
     
-    uz0 = ArrayPartition(u0,z0)
-
-    duz = copy(uz0)
-    @time f(duz, uz0, 0, 0)
-
-    return duz
-
-
-    # Solve the ODE
-    prob = ODEProblem(f,uz0,(0.0,0.01))
-    @time sol = solve(prob,progress=true,save_everystep=true,save_start=false)
-
-    
-    #pyplot()
-    p1 = surface(X,Y,sol[end].x[1][:,:,1],title = "rho_1")
-    p2 = surface(X,Y,sol[end].x[1][:,:,2],title = "rho_{-1}")
-
-    plot(p1,p2,layout=grid(2,1))
+    return f, X, Y
 
 end
+
+function initialconditions(N_x = 41, N_y = 41)
+    rho_0 = cat(1/32*ones(N_y,N_x), 1/32*ones(N_y,N_x), dims=3)
+    u0 = rho_0
+    z1_0 = [1.,1.]
+    z2_0 = [-1.,-1.]
+    z0 = [z1_0  z2_0]
+    return ArrayPartition(u0,z0)
+end
+
+
+
+function solve(tmax=0.01)
+    uz0 = initialconditions()
+    f, X, Y = construct()
+    # Solve the ODE
+    prob = ODEProblem(f,uz0,(0.0,tmax))
+    @time sol = DifferentialEquations.solve(prob,progress=true,save_everystep=true,save_start=false)
+
+    p1 = surface(X,Y,sol[end].x[1][:,:,1],title = "rho_1")
+    p2 = surface(X,Y,sol[end].x[1][:,:,2],title = "rho_{-1}")
+    plot(p1,p2,layout=grid(2,1))
+end
+
+function test_f()
+    uz0 = initialconditions()
+    duz = copy(uz0)
+    f, = construct()
+    @time f(duz, uz0, 0, 0)
+    return duz
+end    
