@@ -1,11 +1,11 @@
 using DifferentialEquations, LinearAlgebra
 using RecursiveArrayTools
 using Plots
+ 
 
-w(s,x) = exp(-norm(s-x))
-K(s,x) = w(s,x) * (s-x)    
-
-function generate_K(N, grid_points)
+function generate_K(N, grid_points)  
+    w(s,x) = exp(-norm(s-x))
+    K(s,x) = w(s,x) * (s-x)   
     k = zeros(N, N, 2)
     for i in 1:N, j in 1:N
         k[i,j,:] = K(grid_points[i,:], grid_points[j,:])
@@ -16,10 +16,10 @@ end
 function agent_force(rho, K_matrix, dV)
     N_y, N_x = size(rho)
     N = N_y * N_x
-# @show size(rho), N
-    #pointwise_int = dV*sum(vec(rho).*K_matrix, dims=1)
 
+    #pointwise_int = dV*sum(vec(rho).*K_matrix, dims=1)
     pointwise_int = zeros(N, 2)
+    # TODO add normalilzation of k-matrix
     for d in 1:2, i in 1:N, j in 1:N
         pointwise_int[i,d] += rho[j] * K_matrix[j, i, d]
     end
@@ -35,39 +35,8 @@ function media_force(z, grid_points, N_x, N_y)
     return force
 end
 
-function construct()
-    # Define the constants for the PDE
-    sigma = 1.0
-    D = sigma^2 * 0.5
-    a = 2.0
-    c = 2.0
-    Gamma_0 = 100
-    dx = 0.1
-    dy = dx
-    dV = dx*dy
-    # domain = [[-2,2],[-2,2]]
-    N_x = Int(4/dx+1)
-    N_y = N_x #so far only works if N_y = N_x
-    N = N_x*N_y
-    X = reshape([x for x in -2:dx:2 for y in -2:dy:2],N_y,N_x)
-    Y = reshape([y for x in -2:dy:2 for y in -2:dx:2],N_y,N_x)
-    grid_points = [reshape(X,1,:);reshape(Y,1,:)]' 
 
-
-
-    # matrix of K evaluated at gridpoints
-    K_matrix  = generate_K(N, grid_points)
-    
-
-    m_1 = 1/2 #proportion of agents of type 1,2
-    m_2 = 1/2 
-
-    # interaction with other agents
-    
-
-    # interaction with media
-
-
+function second_derivative((N_x,N_y), (dx, dy))
     Mx = Array(Tridiagonal([1.0 for i in 1:N_x-1],[-2.0 for i in 1:N_x],[1.0 for i in 1:N_x-1]))
     My = copy(Mx)
     # here matrix should have different shape for Ny not equal Nx
@@ -79,7 +48,10 @@ function construct()
     My[end,end-1] = 2.0
     Mx .= (1/dx^2)*Mx
     My .= (1/dy^2)*My
+    return Mx, My
+end
 
+function centered_difference_force((N_x,N_y), (dx, dy))
     #centered first difference for force
     Cx = Array(Tridiagonal([1.0 for i in 1:N_x-1],[0. for i in 1:N_x],[-1.0 for i in 1:N_x-1]))
     Cy = -copy(Cx)
@@ -87,15 +59,47 @@ function construct()
     Cy .= 1/(2*dy)*Cy
     Cy[1,1:2] = 1/(dy)* [-1,1]
     Cy[end,end-1:end] = 1/(dy)* [-1,1]
-    Cy[1:2,1] = 1/(dx)* [-1,1]
-    Cy[end-1:end,end] = 1/(dx)* [-1,1]
+    Cx[1:2,1] = 1/(dx)* [-1,1]
+    Cx[end-1:end,end] = 1/(dx)* [-1,1]
+    return Cx, Cy
+end
 
+function centered_difference_density((N_x,N_y), (dx, dy))
     #centered first difference for density
     Cx_rho = Array(Tridiagonal([1.0 for i in 1:N_x-1],[0. for i in 1:N_x],[-1.0 for i in 1:N_x-1]))
-    Cy_rho = -copy(Cx)
-    Cx_rho .= 1/(2*dx)*Cx
-    Cy_rho .= 1/(2*dy)*Cy
+    Cy_rho = -copy(Cx_rho)
+    Cx_rho .= 1/(2*dx)*Cx_rho
+    Cy_rho .= 1/(2*dy)*Cy_rho
     Cx_rho[2,1]=0. ; Cx_rho[end-1,end]=0.; Cy_rho[1,2]=0.; Cy_rho[end,end-1]=0.
+    return Cx_rho, Cy_rho
+end
+
+function construct()
+    # Define the constants for the PDE
+    sigma = 1.0
+    D = sigma^2 * 0.5
+    a = 2.0
+    c = 2.0
+    Gamma_0 = 100
+    m_1 = 1/2 #proportion of agents of type 1,2
+    m_2 = 1/2 
+    dx = 0.25
+    dy = dx
+    dV = dx*dy
+    # domain = [[-2,2],[-2,2]]
+    N_x = Int(4/dx+1)
+    N_y = N_x #so far only works if N_y = N_x
+    N = N_x*N_y
+    X = reshape([x for x in -2:dx:2 for y in -2:dy:2],N_y,N_x)
+    Y = reshape([y for x in -2:dy:2 for y in -2:dx:2],N_y,N_x)
+    grid_points = [reshape(X,1,:);reshape(Y,1,:)]' 
+    # matrix of K evaluated at gridpoints
+    K_matrix  = generate_K(N, grid_points)
+    
+    Mx, My = second_derivative((N_x,N_y), (dx, dy))
+    Cx, Cy = centered_difference_force((N_x,N_y), (dx, dy))
+    Cx_rho, Cy_rho = centered_difference_density((N_x,N_y), (dx, dy))
+
 
     # Define the discretized PDE as an ODE function
     function f(duz,uz,p,t)
@@ -136,7 +140,7 @@ function construct()
 
 end
 
-function initialconditions(N_x = 41, N_y = 41)
+function initialconditions(N_x = 17, N_y = 17)
     rho_0 = cat(1/32*ones(N_y,N_x), 1/32*ones(N_y,N_x), dims=3)
     u0 = rho_0
     z1_0 = [1.,1.]
