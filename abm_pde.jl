@@ -18,8 +18,8 @@ const X = reshape([x for x in -2:dx:2 for y in -2:dy:2],N_y,N_x)
 const Y = reshape([y for x in -2:dy:2 for y in -2:dx:2],N_y,N_x)
 const grid_points = [reshape(X,1,:);reshape(Y,1,:)]' 
 
-w(x,s) = exp(-norm(x-s))
-K(x,s) = w(x,s) * (s-x)  
+w(s,x) = exp(-norm(s-x))
+K(s,x) = w(s,x) * (s-x)    
 
 function generate_K()
     k = zeros(N, N, 2)
@@ -49,7 +49,7 @@ function agent_interaction(rho_s, rho_other)
 
     pointwise_int = zeros(N, 2)
     for d in 1:2, j in 1:N, i in 1:N
-        pointwise_int[i,d] += rho[j] * K_matrix[i, j, d]
+        pointwise_int[i,d] += rho[j] * K_matrix[j, i, d]
     end
     pointwise_int .*= dV
 
@@ -111,8 +111,8 @@ function f(duz,uz,p,t)
   drho_2 .= D*(My*rho_2 + rho_2*Mx) - (Cy*force_2[:,:,2] + force_2[:,:,1]*Cx)
   mean_rho_1 = 1/m_1 * reshape(rho_1,1,N)*grid_points
   mean_rho_2 = 1/m_2 * reshape(rho_2,1,N)*grid_points
-  dz_1 .= -1/(Gamma_0*m_1) * (z_1 - mean_rho_1')
-  dz_2 .= -1/(Gamma_0*m_2) * (z_2 - mean_rho_2')
+  dz_1 .= 1/(Gamma_0*m_1) * (mean_rho_1' - z_1)
+  dz_2 .= 1/(Gamma_0*m_2) * (mean_rho_2' - z_2)
 end
  
 uz0 = ArrayPartition(u0,z0)
