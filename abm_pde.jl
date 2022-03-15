@@ -1,7 +1,6 @@
 using DifferentialEquations, LinearAlgebra
 using RecursiveArrayTools
 using Plots
- 
 
 function generate_K(N, grid_points)  
     W(s,x) = exp(-norm(s-x))
@@ -33,9 +32,8 @@ function media_force(z, grid_points, N_x, N_y)
     return force
 end
 
-
 function second_derivative((N_x,N_y), (dx, dy))
-    M = Array(Tridiagonal([1.0 for i in 1:N_x-1],[-2.0 for i in 1:N_x],[1.0 for i in 1:N_x-1]))
+    M = Tridiagonal(ones(N_x-1), fill(-2., N_x), ones(N_x-1))
     # here matrix should have different shape for Ny not equal Nx
     # neumann boundary conditions with zero flux imply (using centered difference) that value of function outside domain
     # equals value of function inside domain (not on boundary), thus the following replacement
@@ -48,7 +46,7 @@ end
 
 function centered_difference_force((N_x,N_y), (dx, dy))
     #centered first difference for force, doesnt work for different x, y grids
-    C = 1/(2*dx)*Array(Tridiagonal([-1.0 for i in 1:N_x-1],[0. for i in 1:N_x],[1.0 for i in 1:N_x-1]))
+    C = 1/(2*dx)*Tridiagonal(-ones(N_x-1), zeros(N_x), ones(N_x-1))
     C[1,1:2] = 1/(dx)* [-1,1]
     C[end,end-1:end] = 1/(dx)* [-1,1]
 
@@ -57,7 +55,7 @@ end
 
 function centered_difference_density((N_x,N_y), (dx, dy))
     #centered first difference for density
-    Cr = 1/(2*dx)*Array(Tridiagonal([-1.0 for i in 1:N_x-1],[0. for i in 1:N_x],[1.0 for i in 1:N_x-1]))
+    Cr = 1/(2*dx)*Tridiagonal(-ones(N_x-1), zeros(N_x), ones(N_x-1))
     Cr[1,2]=0.; Cr[end,end-1]=0.
     return Cr
 end
@@ -69,8 +67,7 @@ function construct()
     a = 2.0
     c = 2.0
     Gamma_0 = 100
-    m_1 = 1/2 #proportion of agents of type 1,2
-    m_2 = 1/2 
+    m = [1/2, 1/2] #proportion of agents of type 1,2
     dx = 0.1
     dy = dx
     dV = dx*dy
@@ -78,9 +75,9 @@ function construct()
     N_x = Int(4/dx+1)
     N_y = N_x #so far only works if N_y = N_x
     N = N_x*N_y
-    Y = reshape([y for y in -2:dy:2 for x in -2:dx:2],N_x,N_y)
-    X = reshape([x for y in -2:dx:2 for x in -2:dy:2],N_x,N_y)
-    grid_points = [reshape(X,1,:);reshape(Y,1,:)]' 
+    X = [x for x in -2:dx:2, y in -2:dy:2]
+    Y = [y for x in -2:dx:2, y in -2:dy:2]
+    grid_points = [vec(X) vec(Y)]
     # matrix of K evaluated at gridpoints
     K_matrix, W_matrix  = generate_K(N, grid_points)
     
@@ -88,13 +85,13 @@ function construct()
     C = centered_difference_force((N_x,N_y), (dx, dy))
     Cr = centered_difference_density((N_x,N_y), (dx, dy))
  
-    p = (grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m_1, m_2, Gamma_0)
+    p = (; grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m, Gamma_0)
     return p, X, Y
-
 end
 
 function initialconditions(N_x = 41, N_y = 41)
-    rho_0 = cat(1/32*ones(N_x,N_y), 1/32*ones(N_x,N_y), dims=3)
+    #rho_0 = cat(1/32*ones(N_x,N_y), 1/32*ones(N_x,N_y), dims=3)
+    rho_0 = fill(1/32, N_x, N_y, 2)
     u0 = rho_0
     z1_0 = [1.,1.]
     z2_0 = [-1.,-1.]
@@ -104,42 +101,37 @@ end
 
 function f(duz,uz,p,t)
     yield()
-    grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m_1, m_2, Gamma_0 = p
+    (; grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m, Gamma_0) = p
     u, z = uz.x
     du, dz = duz.x
 
-    rho_1 = @view  u[:,:,1]
-    rho_2 = @view  u[:,:,2]
-    drho_1 = @view du[:,:,1]
-    drho_2 = @view du[:,:,2]
+    rhosum = u[:,:,1] + u[:,:,2]
+    Fagent = agent_force(rhosum, K_matrix, W_matrix, dV)
 
-    z_1 = @view z[:,1]
-    z_2 = @view z[:,2]
-    dz_1 = @view dz[:,1]
-    dz_2 = @view dz[:,2]
+    for i in 1:2
+        rho = @view  u[:,:,i]
+        drho = @view du[:,:,i]
+        zi = @view z[:,i]
+        dzi = @view dz[:,i]
 
-    rho = rho_1 + rho_2
-    force_1 = c * media_force(z_1, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, W_matrix, dV)
-    force_2 = c * media_force(z_2, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, W_matrix, dV)
-    div_1 = rho_1 .* (C*force_1[:,:,1] + force_1[:,:,2]*C') + (Cr*rho_1)*force_1[:,:,1]+ (rho_1*Cr')*force_1[:,:,2]
-    div_2 = rho_2 .* (C*force_2[:,:,1] + force_2[:,:,2]*C') + (Cr*rho_2)*force_2[:,:,1]+ (rho_2*Cr')*force_2[:,:,2]
-    drho_1 .= D*(M*rho_1 + rho_1*M') - div_1
-    drho_2 .= D*(M*rho_2 + rho_2*M') - div_2
-    mean_rho_1 = 1/m_1 * reshape(rho_1,1,N)*grid_points
-    mean_rho_2 = 1/m_2 * reshape(rho_2,1,N)*grid_points
-    dz_1 .= 1/(Gamma_0*m_1) * (mean_rho_1' - z_1)
-    dz_2 .= 1/(Gamma_0*m_2) * (mean_rho_2' - z_2)
+        force = c * media_force(zi, grid_points, N_x, N_y) + a * Fagent
+        div = rho .* (C*force[:,:,1] + force[:,:,2]*C') + (Cr*rho).*force[:,:,1]+ (rho*Cr').*force[:,:,2]
+        drho .= D*(M*rho + rho*M') + div
+
+        mean_rho = 1/m[i] * reshape(rho,1,N)*grid_points
+        dzi .= 1/(Gamma_0*m[i]) * (mean_rho' - zi)
+    end
 end
 
 
-function solve(tmax=0.01)
+function solve(tmax=0.01; alg=nothing)
     uz0 = initialconditions()
     p, X, Y = construct()
     
     # Solve the ODE
     prob = ODEProblem(f,uz0,(0.0,tmax),p)
     
-    @time sol = DifferentialEquations.solve(prob ,progress=true,save_everystep=true,save_start=false)
+    @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
 
     p1 = heatmap(sol[end].x[1][:,:,1],title = "rho_1")
     p2 = heatmap(sol[end].x[1][:,:,2],title = "rho_{-1}")
