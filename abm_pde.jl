@@ -29,6 +29,12 @@ function agent_force(rho, K_matrix, dV)
     return force
 end
 
+function media_force(z, grid_points, N_x, N_y)
+    pointwise_int =   z' .- grid_points
+    force = reshape(pointwise_int,N_y,N_x, 2)
+    return force
+end
+
 function construct()
     # Define the constants for the PDE
     sigma = 1.0
@@ -60,11 +66,7 @@ function construct()
     
 
     # interaction with media
-    function media_force(z)
-        pointwise_int =   z' .- grid_points
-        force = reshape(pointwise_int,N_y,N_x, 2)
-        return force
-    end
+
 
     Mx = Array(Tridiagonal([1.0 for i in 1:N_x-1],[-2.0 for i in 1:N_x],[1.0 for i in 1:N_x-1]))
     My = copy(Mx)
@@ -98,6 +100,7 @@ function construct()
     # Define the discretized PDE as an ODE function
     function f(duz,uz,p,t)
 
+        grid_points, N_x, N_y, a, c, K_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0 = p
         u, z = uz.x
         du, dz = duz.x
 
@@ -116,8 +119,8 @@ function construct()
         #@show size(z_1)
 
         rho = rho_1 + rho_2
-        force_1 = c * media_force(z_1) + a * agent_force(rho, K_matrix, dV)
-        force_2 = c * media_force(z_2) + a * agent_force(rho, K_matrix, dV)
+        force_1 = c * media_force(z_1, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, dV)
+        force_2 = c * media_force(z_2, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, dV)
         div_1 = rho_1 .* (Cy*force_1[:,:,2] + force_1[:,:,1]*Cx) + (Cy_rho*rho_1)*force_1[:,:,2]+ (rho_1*Cx_rho)*force_1[:,:,1]
         div_2 = rho_2 .* (Cy*force_2[:,:,2] + force_2[:,:,1]*Cx) + (Cy_rho*rho_2)*force_2[:,:,2]+ (rho_2*Cx_rho)*force_2[:,:,1]
         drho_1 .= D*(My*rho_1 + rho_1*Mx) - div_1
@@ -128,7 +131,8 @@ function construct()
         dz_2 .= 1/(Gamma_0*m_2) * (mean_rho_2' - z_2)
     end
     
-    return f, X, Y
+    p = (grid_points, N_x, N_y, a, c, K_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0)
+    return p, X, Y
 
 end
 
@@ -141,13 +145,47 @@ function initialconditions(N_x = 41, N_y = 41)
     return ArrayPartition(u0,z0)
 end
 
+function f(duz,uz,p,t)
+    grid_points, N_x, N_y, a, c, K_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0 = p
+
+    u, z = uz.x
+    du, dz = duz.x
+
+    rho_1 = @view  u[:,:,1]
+    rho_2 = @view  u[:,:,2]
+    drho_1 = @view du[:,:,1]
+    drho_2 = @view du[:,:,2]
+
+    z_1 = @view z[:,1]
+    z_2 = @view z[:,2]
+    dz_1 = @view dz[:,1]
+    dz_2 = @view dz[:,2]
+
+    #@show size(media_interation(rho_1, z_1))
+
+    #@show size(z_1)
+
+    rho = rho_1 + rho_2
+    force_1 = c * media_force(z_1, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, dV)
+    force_2 = c * media_force(z_2, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, dV)
+    div_1 = rho_1 .* (Cy*force_1[:,:,2] + force_1[:,:,1]*Cx) + (Cy_rho*rho_1)*force_1[:,:,2]+ (rho_1*Cx_rho)*force_1[:,:,1]
+    div_2 = rho_2 .* (Cy*force_2[:,:,2] + force_2[:,:,1]*Cx) + (Cy_rho*rho_2)*force_2[:,:,2]+ (rho_2*Cx_rho)*force_2[:,:,1]
+    drho_1 .= D*(My*rho_1 + rho_1*Mx) - div_1
+    drho_2 .= D*(My*rho_2 + rho_2*Mx) - div_2
+    mean_rho_1 = 1/m_1 * reshape(rho_1,1,N)*grid_points
+    mean_rho_2 = 1/m_2 * reshape(rho_2,1,N)*grid_points
+    dz_1 .= 1/(Gamma_0*m_1) * (mean_rho_1' - z_1)
+    dz_2 .= 1/(Gamma_0*m_2) * (mean_rho_2' - z_2)
+end
 
 
 function solve(tmax=0.01)
     uz0 = initialconditions()
-    f, X, Y = construct()
+    p, X, Y = construct()
+    
     # Solve the ODE
-    prob = ODEProblem(f,uz0,(0.0,tmax))
+    prob = ODEProblem(f,uz0,(0.0,tmax),p)
+    
     @time sol = DifferentialEquations.solve(prob,progress=true,save_everystep=true,save_start=false)
 
     p1 = surface(X,Y,sol[end].x[1][:,:,1],title = "rho_1")
@@ -158,7 +196,7 @@ end
 function test_f()
     uz0 = initialconditions()
     duz = copy(uz0)
-    f, = construct()
-    @time f(duz, uz0, 0, 0)
+    p, = construct()
+    @time f(duz, uz0, p, 0)
     return duz
 end    
