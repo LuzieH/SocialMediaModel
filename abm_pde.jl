@@ -71,7 +71,7 @@ function construct()
     Gamma_0 = 100
     m_1 = 1/2 #proportion of agents of type 1,2
     m_2 = 1/2 
-    dx = 0.1
+    dx = 0.05
     dy = dx
     dV = dx*dy
     # domain = [[-2,2],[-2,2]]
@@ -88,12 +88,13 @@ function construct()
     C = centered_difference_force((N_x,N_y), (dx, dy))
     Cr = centered_difference_density((N_x,N_y), (dx, dy))
  
-    p = (grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m_1, m_2, Gamma_0)
-    return p, X, Y
+    p = (;grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m_1, m_2, Gamma_0)
+    return p
 
 end
 
-function initialconditions((N_x , N_y))
+function initialconditions(p)
+    (; N_x , N_y) = p
     rho_0 = cat(1/32*ones(N_x,N_y), 1/32*ones(N_x,N_y), dims=3)
     u0 = rho_0
     z1_0 = [1.,1.]
@@ -122,6 +123,8 @@ function f(duz,uz,p,t)
     af =  a * agent_force(rho, K_matrix, W_matrix, dV)
     force_1 = c * media_force(z_1, grid_points, N_x, N_y) + af 
     force_2 = c * media_force(z_2, grid_points, N_x, N_y) + af 
+    force_1[1,:,:] .= force_1[end,:,:] .= force_1[:,1,:] .= force_1[:,end,:].=0
+    force_2[1,:,:] .= force_2[end,:,:] .= force_2[:,1,:] .= force_2[:,end,:].=0
     div_1 = rho_1 .* (C*force_1[:,:,1] + force_1[:,:,2]*C') + (Cr * rho_1) .* force_1[:,:,1]+ (rho_1*Cr') .* force_1[:,:,2]
     div_2 = rho_2 .* (C*force_2[:,:,1] + force_2[:,:,2]*C') + (Cr * rho_2) .* force_2[:,:,1]+ (rho_2 * Cr') .* force_2[:,:,2]
     drho_1 .= D * (M*rho_1 + rho_1*M') - div_1
@@ -135,9 +138,9 @@ end
 
 function solve(tmax=0.01)
     
-    p, X, Y = construct()
-    grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m_1, m_2, Gamma_0 = p
-    uz0 = initialconditions((N_x, N_y))
+    p = construct()
+   
+    uz0 = initialconditions(p)
     # Solve the ODE
     prob = ODEProblem(f,uz0,(0.0,tmax),p)
     
@@ -145,14 +148,14 @@ function solve(tmax=0.01)
 
     p1 = heatmap(sol[end].x[1][:,:,1],title = "rho_1")
     p2 = heatmap(sol[end].x[1][:,:,2],title = "rho_{-1}")
-    plot(p1,p2,layout=grid(2,1)) |> display
+    plot(p1, p2, layout=grid(2,1)) |> display
     return sol
 end
 
 function test_f()
-    uz0 = initialconditions()
+    p = construct()
+    uz0 = initialconditions(p)
     duz = copy(uz0)
-    p, = construct()
     @time f(duz, uz0, p, 0)
     return duz
 end    
