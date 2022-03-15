@@ -4,22 +4,27 @@ using Plots
  
 
 function generate_K(N, grid_points)  
-    w(s,x) = exp(-norm(s-x))
-    K(x,s) = w(s,x) * (s-x)   
+    W(s,x) = exp(-norm(s-x))
+    K(x,s) = W(s,x) * (s-x)   
     k = zeros(N, N, 2)
+    w = zeros(N, N)
     for i in 1:N, j in 1:N
         k[i,j,:] = K(grid_points[i,:], grid_points[j,:])
+        w[i,j] = W(grid_points[i,:], grid_points[j,:])
     end
-    return k
+    return k, w
 end
 
-function agent_force(rho, K_matrix, dV)
+function agent_force(rho, K_matrix, W_matrix,  dV)
     force = zeros(size(rho)..., 2)
     @views for d in 1:2
         f = vec(force[:,:,d])
         f .= dV * K_matrix[:,:,d] * vec(rho)
     end
-    return force
+
+    norms = dV * W_matrix * vec(rho)
+
+    return force./reshape(norms, size(rho))
 end
 
 function media_force(z, grid_points, N_x, N_y)
@@ -87,7 +92,7 @@ function construct()
     Y = reshape([y for x in -2:dy:2 for y in -2:dx:2],N_y,N_x)
     grid_points = [reshape(X,1,:);reshape(Y,1,:)]' 
     # matrix of K evaluated at gridpoints
-    K_matrix  = generate_K(N, grid_points)
+    K_matrix, W_matrix  = generate_K(N, grid_points)
     
     Mx, My = second_derivative((N_x,N_y), (dx, dy))
     Cx, Cy = centered_difference_force((N_x,N_y), (dx, dy))
@@ -97,7 +102,7 @@ function construct()
     # Define the discretized PDE as an ODE function
     function f(duz,uz,p,t)
 
-        grid_points, N_x, N_y, a, c, K_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0 = p
+        grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0 = p
         u, z = uz.x
         du, dz = duz.x
 
@@ -116,8 +121,8 @@ function construct()
         #@show size(z_1)
 
         rho = rho_1 + rho_2
-        force_1 = c * media_force(z_1, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, dV)
-        force_2 = c * media_force(z_2, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, dV)
+        force_1 = c * media_force(z_1, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, W_matrix, dV)
+        force_2 = c * media_force(z_2, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, W_matrix, dV)
         div_1 = rho_1 .* (Cy*force_1[:,:,2] + force_1[:,:,1]*Cx) + (Cy_rho*rho_1)*force_1[:,:,2]+ (rho_1*Cx_rho)*force_1[:,:,1]
         div_2 = rho_2 .* (Cy*force_2[:,:,2] + force_2[:,:,1]*Cx) + (Cy_rho*rho_2)*force_2[:,:,2]+ (rho_2*Cx_rho)*force_2[:,:,1]
         drho_1 .= D*(My*rho_1 + rho_1*Mx) - div_1
@@ -128,7 +133,7 @@ function construct()
         dz_2 .= 1/(Gamma_0*m_2) * (mean_rho_2' - z_2)
     end
     
-    p = (grid_points, N_x, N_y, a, c, K_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0)
+    p = (grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0)
     return p, X, Y
 
 end
@@ -143,7 +148,7 @@ function initialconditions(N_x = 17, N_y = 17)
 end
 
 function f(duz,uz,p,t)
-    grid_points, N_x, N_y, a, c, K_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0 = p
+    grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, Cx, Cy, Cx_rho, Cy_rho, D, Mx, My, N, m_1, m_2, Gamma_0 = p
 
     u, z = uz.x
     du, dz = duz.x
@@ -163,8 +168,8 @@ function f(duz,uz,p,t)
     #@show size(z_1)
 
     rho = rho_1 + rho_2
-    force_1 = c * media_force(z_1, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, dV)
-    force_2 = c * media_force(z_2, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, dV)
+    force_1 = c * media_force(z_1, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, W_matrix, dV)
+    force_2 = c * media_force(z_2, grid_points, N_x, N_y) + a * agent_force(rho, K_matrix, W_matrix, dV)
     div_1 = rho_1 .* (Cy*force_1[:,:,2] + force_1[:,:,1]*Cx) + (Cy_rho*rho_1)*force_1[:,:,2]+ (rho_1*Cx_rho)*force_1[:,:,1]
     div_2 = rho_2 .* (Cy*force_2[:,:,2] + force_2[:,:,1]*Cx) + (Cy_rho*rho_2)*force_2[:,:,2]+ (rho_2*Cx_rho)*force_2[:,:,1]
     drho_1 .= D*(My*rho_1 + rho_1*Mx) - div_1
@@ -185,9 +190,10 @@ function solve(tmax=0.01)
     
     @time sol = DifferentialEquations.solve(prob,progress=true,save_everystep=true,save_start=false)
 
-    p1 = surface(X,Y,sol[end].x[1][:,:,1],title = "rho_1")
-    p2 = surface(X,Y,sol[end].x[1][:,:,2],title = "rho_{-1}")
-    plot(p1,p2,layout=grid(2,1))
+    p1 = heatmap(sol[end].x[1][:,:,1],title = "rho_1")
+    p2 = heatmap(sol[end].x[1][:,:,2],title = "rho_{-1}")
+    plot(p1,p2,layout=grid(2,1)) |> display
+    return sol
 end
 
 function test_f()
