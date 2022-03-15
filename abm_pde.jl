@@ -5,7 +5,7 @@ using Plots
 
 function generate_K(N, grid_points)  
     w(s,x) = exp(-norm(s-x))
-    K(s,x) = w(s,x) * (s-x)   
+    K(x,s) = w(s,x) * (s-x)   
     k = zeros(N, N, 2)
     for i in 1:N, j in 1:N
         k[i,j,:] = K(grid_points[i,:], grid_points[j,:])
@@ -14,18 +14,11 @@ function generate_K(N, grid_points)
 end
 
 function agent_force(rho, K_matrix, dV)
-    N_y, N_x = size(rho)
-    N = N_y * N_x
-
-    #pointwise_int = dV*sum(vec(rho).*K_matrix, dims=1)
-    pointwise_int = zeros(N, 2)
-    # TODO add normalilzation of k-matrix
-    for d in 1:2, i in 1:N, j in 1:N
-        pointwise_int[i,d] += rho[j] * K_matrix[j, i, d]
+    force = zeros(size(rho)..., 2)
+    @views for d in 1:2
+        f = vec(force[:,:,d])
+        f .= dV * K_matrix[:,:,d] * vec(rho)
     end
-    pointwise_int .*= dV
-
-    force = reshape(pointwise_int, N_y, N_x, 2)
     return force
 end
 
