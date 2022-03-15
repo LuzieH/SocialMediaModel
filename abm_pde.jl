@@ -93,7 +93,7 @@ function construct()
 
 end
 
-function initialconditions(N_x = 41, N_y = 41)
+function initialconditions((N_x , N_y))
     rho_0 = cat(1/32*ones(N_x,N_y), 1/32*ones(N_x,N_y), dims=3)
     u0 = rho_0
     z1_0 = [1.,1.]
@@ -134,9 +134,10 @@ end
 
 
 function solve(tmax=0.01)
-    uz0 = initialconditions()
-    p, X, Y = construct()
     
+    p, X, Y = construct()
+    grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m_1, m_2, Gamma_0 = p
+    uz0 = initialconditions((N_x, N_y))
     # Solve the ODE
     prob = ODEProblem(f,uz0,(0.0,tmax),p)
     
