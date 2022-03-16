@@ -1,16 +1,19 @@
 using DifferentialEquations, LinearAlgebra
 using RecursiveArrayTools
 using Plots
-using LatexStrings 
 
-function generate_K(N, grid_points)  
-    W(s,x) = exp(-norm(s-x))
-    K(x,s) = W(s,x) * (s-x)   
+function generate_K(grid_points)
+    N, d = size(grid_points)
+    @assert d == 2
     k = zeros(N, N, 2)
     w = zeros(N, N)
-    for i in 1:N, j in 1:N
-        k[i,j,:] = K(grid_points[i,:], grid_points[j,:])
-        w[i,j] = W(grid_points[i,:], grid_points[j,:])
+
+    @inbounds for j in 1:N, i in 1:N
+        x = grid_points[i,1] - grid_points[j,1]
+        y = grid_points[i,2] - grid_points[j,2]
+        w[i,j] = ww = exp(-sqrt(x^2 + y^2))
+        k[i,j, 1] = ww * x
+        k[i,j, 2] = ww * y
     end
     return k, w
 end
@@ -69,7 +72,7 @@ function construct()
     a = 2.0
     c = 2.0
     Gamma_0 = 100
-    m = [1/2, 1/2] #proportion of agents of type 1,2 
+    m = [1/2, 1/2] #proportion of agents of type 1,2
     dx = 0.05
     dy = dx
     dV = dx*dy
@@ -81,15 +84,15 @@ function construct()
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     grid_points = [vec(X) vec(Y)] 
     # matrix of K evaluated at gridpoints
-    K_matrix, W_matrix  = generate_K(N, grid_points)
-    
+    K_matrix, W_matrix  = generate_K(grid_points)
+
     M = second_derivative((N_x,N_y), (dx, dy))
     C = centered_difference_force((N_x,N_y), (dx, dy))
     Cr = centered_difference_density((N_x,N_y), (dx, dy))
  
     p = (; grid_points, N_x, N_y, domain,  a, c, K_matrix, W_matrix, dx,dy, dV, C, Cr,  D, M , N, m, Gamma_0)
-    return p
 
+    return p
 end
 
 function initialconditions(p)
@@ -132,14 +135,12 @@ end
 
 
 function solve(tmax=0.1; alg=nothing)
-    
     p = construct()
-   
+    (; domain, dx, dy) = p
     uz0 = initialconditions(p)
+    
     # Solve the ODE
     prob = ODEProblem(f,uz0,(0.0,tmax),p)
-    
-    (; domain, dx, dy) = p
     @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
     
     Plots.pyplot()
@@ -160,7 +161,7 @@ function test_f()
     duz = copy(uz0)
     @time f(duz, uz0, p, 0)
     return duz
-end    
+end
 
 function creategif(sol,p,  tmax=0.1, dt=0.01)
 
@@ -183,4 +184,3 @@ function creategif(sol,p,  tmax=0.1, dt=0.01)
      
     Plots.gif(pdegif, "evolution.gif", fps = 30)
 end
- 
