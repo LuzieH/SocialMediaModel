@@ -73,12 +73,12 @@ function construct()
     dx = 0.05
     dy = dx
     dV = dx*dy
-    # domain = [[-2,2],[-2,2]]
-    N_x = Int(4/dx+1)
+    domain = [-2 2; -2 2]
+    N_x = Int((domain[1,2]-domain[1,1])/dx+1)
     N_y = N_x #so far only works if N_y = N_x
     N = N_x*N_y
-    X = [x for x in -2:dx:2, y in -2:dy:2]
-    Y = [y for x in -2:dx:2, y in -2:dy:2]
+    X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
+    Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     grid_points = [vec(X) vec(Y)] 
     # matrix of K evaluated at gridpoints
     K_matrix, W_matrix  = generate_K(N, grid_points)
@@ -87,7 +87,7 @@ function construct()
     C = centered_difference_force((N_x,N_y), (dx, dy))
     Cr = centered_difference_density((N_x,N_y), (dx, dy))
  
-    p = (; grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m, Gamma_0)
+    p = (; grid_points, N_x, N_y, domain,  a, c, K_matrix, W_matrix, dx,dy, dV, C, Cr,  D, M , N, m, Gamma_0)
     return p
 
 end
@@ -105,7 +105,7 @@ end
 
 function f(duz,uz,p,t)
     yield()
-    (; grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m, Gamma_0) = p
+    (; grid_points, N_x, N_y, domain, a, c, K_matrix, W_matrix, dx,dy, dV, C, Cr,  D, M , N, m, Gamma_0) = p
     u, z = uz.x
     du, dz = duz.x
 
@@ -119,6 +119,7 @@ function f(duz,uz,p,t)
 
         force = c * media_force(zi, grid_points, N_x, N_y) + a * Fagent
         #ensure force is zero at boundary to conserve density
+        #TODO: smoothen the force to zero at boundary!
         force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0
         div = rho .* (C*force[:,:,1] + force[:,:,2]*C') + (Cr*rho).*force[:,:,1]+ (rho*Cr').*force[:,:,2]
         drho .= D*(M*rho + rho*M') - div
@@ -130,7 +131,7 @@ function f(duz,uz,p,t)
 end
 
 
-function solve(tmax=0.01; alg=nothing)
+function solve(tmax=0.1; alg=nothing)
     
     p = construct()
    
@@ -138,12 +139,19 @@ function solve(tmax=0.01; alg=nothing)
     # Solve the ODE
     prob = ODEProblem(f,uz0,(0.0,tmax),p)
     
+    (; domain, dx, dy) = p
     @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
-
-    p1 = heatmap(sol[end].x[1][:,:,1],title = "rho_1")
-    p2 = heatmap(sol[end].x[1][:,:,2],title = "rho_{-1}")
-    plot(p1, p2, layout=grid(2,1)) |> display
-    return sol
+    
+    Plots.pyplot()
+    x = domain[1,1]:dx:domain[1,2]
+    y = domain[2,1]:dy:domain[2,2]
+    p1 = heatmap(x,y, sol[end].x[1][:,:,1],title = "rho_1")
+    scatter!(p1, [sol[end].x[2][1,1]], [sol[end].x[2][2,1]],markercolor=[:green], lab="z_1")
+    p2 = heatmap(x,y, sol[end].x[1][:,:,2],title = "rho_{-1}")
+    scatter!(p2, [sol[end].x[2][1,2]], [sol[end].x[2][2,2]],markercolor=[:green],lab="z_{-1}")
+    plot(p1, p2, layout=[1 1], size=(1000,400)) |> display
+    savefig("finaltime_pde.png")
+    return sol, p
 end
 
 function test_f()
@@ -153,4 +161,26 @@ function test_f()
     @time f(duz, uz0, p, 0)
     return duz
 end    
+
+function creategif(sol,p,  tmax=0.1, dt=0.01)
+
+    rho1(t)=sol(t).x[1][:,:,1]
+    rho2(t)=sol(t).x[1][:,:,2]
+    z1(t)=sol(t).x[2][:,1]
+    z2(t)=sol(t).x[2][:,2]
+
+    (; domain, dx, dy) = p
+    x = domain[1,1]:dx:domain[1,2]
+    y = domain[2,1]:dy:domain[2,2]
+     
+    pdegif = @animate for t = 0:dt:tmax
+        p1 = heatmap(x,y, rho1(t),title = "rho_1")
+        scatter!(p1, [z1(t)[1]], [z1(t)[2]],markercolor=[:green], lab="z_1")
+        p2= heatmap(x,y, rho2(t),title = "rho_-1")
+        scatter!(p2, [z2(t)[1]], [z2(t)[2]],markercolor=[:green], lab="z_-1")
+        plot(p1, p2, layout=[1 1], size=(1000,400)) 
+    end
+     
+    Plots.gif(pdegif, "evolution.gif", fps = 30)
+end
  
