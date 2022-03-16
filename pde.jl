@@ -1,7 +1,7 @@
 using DifferentialEquations, LinearAlgebra
 using RecursiveArrayTools
 using Plots
- 
+using LatexStrings 
 
 function generate_K(N, grid_points)  
     W(s,x) = exp(-norm(s-x))
@@ -145,10 +145,10 @@ function solve(tmax=0.1; alg=nothing)
     Plots.pyplot()
     x = domain[1,1]:dx:domain[1,2]
     y = domain[2,1]:dy:domain[2,2]
-    p1 = heatmap(x,y, sol[end].x[1][:,:,1],title = "rho_1")
-    scatter!(p1, [sol[end].x[2][1,1]], [sol[end].x[2][2,1]],markercolor=[:green], lab="z_1")
-    p2 = heatmap(x,y, sol[end].x[1][:,:,2],title = "rho_{-1}")
-    scatter!(p2, [sol[end].x[2][1,2]], [sol[end].x[2][2,2]],markercolor=[:green],lab="z_{-1}")
+    p1 = heatmap(x,y, sol[end].x[1][:,:,1],title = "ρ₁")
+    scatter!(p1, [sol[end].x[2][1,1]], [sol[end].x[2][2,1]],markercolor=[:green],markersize=6, lab="z₁")
+    p2 = heatmap(x,y, sol[end].x[1][:,:,2],title = " ρ₋₁")
+    scatter!(p2, [sol[end].x[2][1,2]], [sol[end].x[2][2,2]],markercolor=[:green],markersize=6,lab="z₋₁")
     plot(p1, p2, layout=[1 1], size=(1000,400)) |> display
     savefig("finaltime_pde.png")
     return sol, p
@@ -174,10 +174,10 @@ function creategif(sol,p,  tmax=0.1, dt=0.01)
     y = domain[2,1]:dy:domain[2,2]
      
     pdegif = @animate for t = 0:dt:tmax
-        p1 = heatmap(x,y, rho1(t),title = "rho_1")
-        scatter!(p1, [z1(t)[1]], [z1(t)[2]],markercolor=[:green], lab="z_1")
-        p2= heatmap(x,y, rho2(t),title = "rho_-1")
-        scatter!(p2, [z2(t)[1]], [z2(t)[2]],markercolor=[:green], lab="z_-1")
+        p1 = heatmap(x,y, rho1(t),title =  "ρ₁")
+        scatter!(p1, [z1(t)[1]], [z1(t)[2]],markercolor=[:green],markersize=6, lab="z₁")
+        p2= heatmap(x,y, rho2(t),title = " ρ₋₁")
+        scatter!(p2, [z2(t)[1]], [z2(t)[2]],markercolor=[:green],markersize=6, lab="z₋₁")
         plot(p1, p2, layout=[1 1], size=(1000,400)) 
     end
      
