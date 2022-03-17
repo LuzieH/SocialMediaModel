@@ -9,14 +9,15 @@ function generate_K(grid_points)
     w = zeros(N, N)
 
     @inbounds for j in 1:N, i in 1:N
-        x = grid_points[i,1] - grid_points[j,1]
-        y = grid_points[i,2] - grid_points[j,2]
+        x = grid_points[j,1] - grid_points[i,1] #first component of x' -x
+        y = grid_points[j,2] - grid_points[i,2] #2nd component of x' -x
         w[i,j] = ww = exp(-sqrt(x^2 + y^2))
         k[i,j, 1] = ww * x
         k[i,j, 2] = ww * y
     end
     return k, w
 end
+
 
 function agent_force(rho, K_matrix, W_matrix,  dV)
     force = zeros(size(rho)..., 2)
@@ -146,14 +147,14 @@ function solve(tmax=0.1; alg=nothing)
 end
 
 function solveplot(tmax=0.1; alg=nothing)
-    sol, p = solve(0.1; alg=nothing)
+    sol, p = solve(tmax; alg=nothing)
 
     (; domain, dx, dy) = p
     #PLOTTING
     x = domain[1,1]:dx:domain[1,2]
     y = domain[2,1]:dy:domain[2,2]
-    p1 = plot_solution(sol[end].x[1][:,:,1], sol[end].x[2][:,1], x, y; title="ρ₁", label="z₁") 
-    p2 = plot_solution(sol[end].x[1][:,:,2], sol[end].x[2][:,2], x, y; title="ρ₋₁", label="z₋₁")
+    p1 = plot_solution(sol(tmax).x[1][:,:,1], sol(tmax).x[2][:,1], x, y; title=string("ρ₁(",string(tmax),")"), label="z₁") 
+    p2 = plot_solution(sol(tmax).x[1][:,:,2], sol(tmax).x[2][:,2], x, y; title=string("ρ₋₁(",string(tmax),")"), label="z₋₁")
 
     plot(p1, p2, layout=[1 1], size=(1000,400)) |> display
     savefig("finaltime_pde.png")
@@ -169,7 +170,6 @@ function test_f()
 end
 
 function creategif(sol,p,  tmax=0.1, dt=0.01)
-
     rho1(t)=sol(t).x[1][:,:,1]
     rho2(t)=sol(t).x[1][:,:,2]
     z1(t)=sol(t).x[2][:,1]
@@ -178,18 +178,17 @@ function creategif(sol,p,  tmax=0.1, dt=0.01)
     (; domain, dx, dy) = p
     x = domain[1,1]:dx:domain[1,2]
     y = domain[2,1]:dy:domain[2,2]
-    clims = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
+    cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
     pdegif = @animate for t = 0:dt:tmax
-        p1 = plot_solution(rho1(t), z1(t), x, y; title="ρ₁", label="z₁",clims) 
-        p2 = plot_solution(rho2(t), z2(t), x, y; title="ρ₋₁", label="z₋₁",clims)
-        plot(p1, p2, layout=[1 1], size=(1000,400)) 
+        p1 = plot_solution(rho1(t), z1(t), x, y; title=string("ρ₁(",string(t),")"), label="z₁", clim = cl) 
+        p2 = plot_solution(rho2(t), z2(t), x, y; title=string("ρ₋₁(",string(t),")"), label="z₋₁",clim= cl)
+        plot(p1, p2, layout=[1 1], size=(1000,400))
     end
-     
     Plots.gif(pdegif, "evolution.gif", fps = 30)
 end
 
-function plot_solution(rho, z, x, y; title="", label="", clims=`:auto`)
-    subp =    heatmap(x,y, rho,title = title, c=:berlin, clims=clims)
+function plot_solution(rho, z, x, y; title="", label="", clim=(-Inf, Inf))
+    subp = heatmap(x,y, rho,title = title, c=:berlin, clims=clim)
     scatter!(subp, [z[1]], [z[2]], markercolor=[:yellow],markersize=6, lab=label)
     return subp
 end
