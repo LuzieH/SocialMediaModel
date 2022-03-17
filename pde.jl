@@ -135,15 +135,21 @@ end
 
 
 function solve(tmax=0.1; alg=nothing)
-    p = construct()
-    (; domain, dx, dy) = p
+    p = construct() 
     uz0 = initialconditions(p)
     
     # Solve the ODE
     prob = ODEProblem(f,uz0,(0.0,tmax),p)
     @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
     
-    #Plots.pyplot()
+    return sol, p
+end
+
+function solveplot(tmax=0.1; alg=nothing)
+    sol, p = solve(0.1; alg=nothing)
+
+    (; domain, dx, dy) = p
+    #PLOTTING
     x = domain[1,1]:dx:domain[1,2]
     y = domain[2,1]:dy:domain[2,2]
     p1 = plot_solution(sol[end].x[1][:,:,1], sol[end].x[2][:,1], x, y; title="ρ₁", label="z₁") 
@@ -184,6 +190,6 @@ end
 
 function plot_solution(rho, z, x, y; title="", label="", clims=`:auto`)
     subp =    heatmap(x,y, rho,title = title, c=:berlin, clims=clims)
-    scatter!(subp, [z[1]], [z[2]],markercolor=[:yellow],markersize=6, lab=label)
+    scatter!(subp, [z[1]], [z[2]], markercolor=[:yellow],markersize=6, lab=label)
     return subp
 end
