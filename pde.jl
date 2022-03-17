@@ -43,8 +43,8 @@ function second_derivative((N_x,N_y), (dx, dy))
     # here matrix should have different shape for Ny not equal Nx
     # neumann boundary conditions with zero flux imply (using centered difference) that value of function outside domain
     # equals value of function inside domain (not on boundary), thus the following replacement
-    M[1,2] = 2.0
-    M[end,end-1] = 2.0
+    M[1,1] = -1.
+    M[end,end] = -1.
     M .= (1/dx^2)*M
 
     return M
@@ -57,13 +57,6 @@ function centered_difference_force((N_x,N_y), (dx, dy))
     C[end,end-1:end] = 1/(dx)* [-1,1]
 
     return C
-end
-
-function centered_difference_density((N_x,N_y), (dx, dy))
-    #centered first difference for density
-    Cr = 1/(2*dx)*Tridiagonal(-ones(N_x-1), zeros(N_x), ones(N_x-1))
-    Cr[1,2]=0.; Cr[end,end-1]=0.
-    return Cr
 end
 
 function construct()
@@ -89,9 +82,8 @@ function construct()
 
     M = second_derivative((N_x,N_y), (dx, dy))
     C = centered_difference_force((N_x,N_y), (dx, dy))
-    Cr = centered_difference_density((N_x,N_y), (dx, dy))
  
-    p = (; grid_points, N_x, N_y, domain,  a, c, K_matrix, W_matrix, dx,dy, dV, C, Cr,  D, M , N, m, Gamma_0)
+    p = (; grid_points, N_x, N_y, domain,  a, c, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, m, Gamma_0)
 
     return p
 end
@@ -109,7 +101,7 @@ end
 
 function f(duz,uz,p,t)
     yield()
-    (; grid_points, N_x, N_y, domain, a, c, K_matrix, W_matrix, dx,dy, dV, C, Cr,  D, M , N, m, Gamma_0) = p
+    (; grid_points, N_x, N_y, domain, a, c, K_matrix, W_matrix, dx,dy, dV, C,   D, M , N, m, Gamma_0) = p
     u, z = uz.x
     du, dz = duz.x
 
@@ -122,10 +114,9 @@ function f(duz,uz,p,t)
         dzi = @view dz[:,i]
 
         force = c * media_force(zi, grid_points, N_x, N_y) + a * Fagent
-        #ensure force is zero at boundary to conserve density
-        #TODO: smoothen the force to zero at boundary!
+        #ensure force is zero at boundary to conserve density - effectivly now the fluxes at boundaries cancel
         force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0
-        div = rho .* (C*force[:,:,1] + force[:,:,2]*C') + (Cr*rho).*force[:,:,1]+ (rho*Cr').*force[:,:,2]
+        div =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
         drho .= D*(M*rho + rho*M') - div
 
         mean_rho = 1/m[i] * dV*reshape(rho,1,N)*grid_points
