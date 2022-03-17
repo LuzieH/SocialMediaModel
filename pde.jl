@@ -1,7 +1,6 @@
 using DifferentialEquations, LinearAlgebra
 using RecursiveArrayTools
 using Plots
-using LatexStrings 
 
 function generate_K(N, grid_points)  
     W(s,x) = exp(-norm(s-x))
@@ -142,13 +141,12 @@ function solve(tmax=0.1; alg=nothing)
     (; domain, dx, dy) = p
     @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
     
-    Plots.pyplot()
+    #Plots.pyplot()
     x = domain[1,1]:dx:domain[1,2]
     y = domain[2,1]:dy:domain[2,2]
-    p1 = heatmap(x,y, sol[end].x[1][:,:,1],title = "ρ₁")
-    scatter!(p1, [sol[end].x[2][1,1]], [sol[end].x[2][2,1]],markercolor=[:green],markersize=6, lab="z₁")
-    p2 = heatmap(x,y, sol[end].x[1][:,:,2],title = " ρ₋₁")
-    scatter!(p2, [sol[end].x[2][1,2]], [sol[end].x[2][2,2]],markercolor=[:green],markersize=6,lab="z₋₁")
+    p1 = plot_solution(sol[end].x[1][:,:,1], sol[end].x[2][:,1], x, y; title="ρ₁", label="z₁") 
+    p2 = plot_solution(sol[end].x[1][:,:,2], sol[end].x[2][:,2], x, y; title="ρ₋₁", label="z₋₁")
+
     plot(p1, p2, layout=[1 1], size=(1000,400)) |> display
     savefig("finaltime_pde.png")
     return sol, p
@@ -172,15 +170,18 @@ function creategif(sol,p,  tmax=0.1, dt=0.01)
     (; domain, dx, dy) = p
     x = domain[1,1]:dx:domain[1,2]
     y = domain[2,1]:dy:domain[2,2]
-     
+    clims = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
     pdegif = @animate for t = 0:dt:tmax
-        p1 = heatmap(x,y, rho1(t),title =  "ρ₁")
-        scatter!(p1, [z1(t)[1]], [z1(t)[2]],markercolor=[:green],markersize=6, lab="z₁")
-        p2= heatmap(x,y, rho2(t),title = " ρ₋₁")
-        scatter!(p2, [z2(t)[1]], [z2(t)[2]],markercolor=[:green],markersize=6, lab="z₋₁")
+        p1 = plot_solution(rho1(t), z1(t), x, y; title="ρ₁", label="z₁",clims) 
+        p2 = plot_solution(rho2(t), z2(t), x, y; title="ρ₋₁", label="z₋₁",clims)
         plot(p1, p2, layout=[1 1], size=(1000,400)) 
     end
      
     Plots.gif(pdegif, "evolution.gif", fps = 30)
 end
- 
+
+function plot_solution(rho, z, x, y; title="", label="", clims=`:auto`)
+    subp =    heatmap(x,y, rho,title = title, c=:berlin, clims=clims)
+    scatter!(subp, [z[1]], [z[2]],markercolor=[:yellow],markersize=6, lab=label)
+    return subp
+end
