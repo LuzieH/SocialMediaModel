@@ -50,7 +50,7 @@ function second_derivative((N_x,N_y), (dx, dy))
     return M
 end
 
-function centered_difference_force((N_x,N_y), (dx, dy))
+function centered_difference((N_x,N_y), (dx, dy))
     #centered first difference for force, doesnt work for different x, y grids
     C = 1/(2*dx)*Tridiagonal(-ones(N_x-1), zeros(N_x), ones(N_x-1))
     C[1,1:2] = 1/(dx)* [-1,1]
@@ -81,7 +81,7 @@ function construct()
     K_matrix, W_matrix  = generate_K(grid_points)
 
     M = second_derivative((N_x,N_y), (dx, dy))
-    C = centered_difference_force((N_x,N_y), (dx, dy))
+    C = centered_difference((N_x,N_y), (dx, dy))
  
     p = (; grid_points, N_x, N_y, domain,  a, c, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, m, Gamma_0)
 
