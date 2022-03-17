@@ -18,8 +18,8 @@ function generate_K(grid_points)
     return k, w
 end
 
-function agent_force(rho, K_matrix, W_matrix,  dV)
-    force = zeros(size(rho)..., 2)
+function agent_force(rho::Array{T}, K_matrix, W_matrix,  dV) where T
+    force = zeros(T,size(rho)..., 2)
     @views for d in 1:2
         f = vec(force[:,:,d])
         f .= dV * K_matrix[:,:,d] * vec(rho)
@@ -90,7 +90,9 @@ function construct()
     C = centered_difference_force((N_x,N_y), (dx, dy))
     Cr = centered_difference_density((N_x,N_y), (dx, dy))
 
-    p = (; grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m, Gamma_0)
+    Δ = DiffEqArrayOperator(kern(D * M))
+
+    p = (; Δ, grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr,  D, M , N, m, Gamma_0)
     return p
 
 end
@@ -132,6 +134,56 @@ function f(duz,uz,p,t)
 
 end
 
+function diffusion(duz, uz, p, t)
+    (; D, M) = p
+    println("f1")
+    u, z = uz.x
+    du, dz = duz.x
+    for i in 1:2
+        rho = @view  u[:,:,i]
+        drho = @view du[:,:,i]
+        drho .= D*(M*rho + rho*M')
+    end
+end
+
+function advection(duz, uz, p, t)
+    println("f2")
+    yield()
+    (; grid_points, N_x, N_y, a, c, K_matrix, W_matrix, dV, C, Cr, N, m, Gamma_0) = p
+    u, z = uz.x
+    du, dz = duz.x
+
+    rhosum = u[:,:,1] + u[:,:,2]
+    Fagent = agent_force(rhosum, K_matrix, W_matrix, dV)
+    for i in 1:2
+        rho = @view  u[:,:,i]
+        drho = @view du[:,:,i]
+        zi = @view z[:,i]
+        dzi = @view dz[:,i]
+
+        force = c * media_force(zi, grid_points, N_x, N_y) + a * Fagent
+        #ensure force is zero at boundary to conserve density
+        force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0
+        div = rho .* (C*force[:,:,1] + force[:,:,2]*C') + (Cr*rho).*force[:,:,1]+ (rho*Cr').*force[:,:,2]
+        drho .=  -div
+
+        mean_rho = 1/m[i] * dV*reshape(rho,1,N)*grid_points
+        dzi .= 1/(Gamma_0*m[i]) * (mean_rho' - zi)
+    end
+end
+
+function diffusionop(duz, uz, p, t)
+    (;Δ) = p
+    println("f1")
+    u, z = uz.x
+    du, dz = duz.x
+    for i in 1:2
+        rho = vec(@view  u[:,:,i])
+        drho = vec(@view du[:,:,i])
+        drho .= Δ * rho
+    end
+end
+
 
 function solve(tmax=0.01; alg=nothing)
 
@@ -149,10 +201,66 @@ function solve(tmax=0.01; alg=nothing)
     return sol
 end
 
+function splitsolve(tmax=.01; alg=nothing)
+    p = construct()
+
+    uz0 = initialconditions(p)
+    # Solve the ODE
+    Δ = DiffEqArrayOperator(fullkern(p.D * p.M))
+    prob = SplitODEProblem(Δ,advection,uz0,(0.0,tmax),p)
+
+    D = DiffEqArrayOperator(kern(p.D * p.M))
+
+    @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
+
+    p1 = heatmap(sol[end].x[1][:,:,1],title = "rho_1")
+    p2 = heatmap(sol[end].x[1][:,:,2],title = "rho_{-1}")
+    plot(p1, p2, layout=grid(2,1)) |> display
+    return sol
+end
+
 function test_f()
     p = construct()
     uz0 = initialconditions(p)
     duz = copy(uz0)
     @time f(duz, uz0, p, 0)
     return duz
+end
+#=
+function rho_jacobian!(J, u, p, t)
+    (;D, C, Cr, K_matrix) = p
+    C  = [C, C']
+    Cr = [Cr, Cr']
+    F  = [F1, F2] # need to compute forces here?
+    K  = @views [K_matrix[:,:,1], K_matrix[:,:,2]]
+    J .= D # diffusive part
+    for k in 1:2
+        J .+= Cr[k] .* F[k] #
+        J .+= Cr[k] * u .* K[k]
+        J[diagind[J]] .+= C[k] * F[k]
+        J .+= u .* C[k] * K[k]
+    end
+end
+=#
+
+# blow up 1d kernel to higher (2) dimensions
+function kern(M)
+    N = size(M, 1)
+    MM = zeros(N,N,N,N)
+
+    for i in 1:N, j in 1:N, k in 1:N
+        MM[i,k,j,k] += M[i,j]
+        MM[k,i,k,j] += M[i,j]
+    end
+
+
+    A = sparse(reshape(MM, N*N, N*N))
+    #Z = spzeros(N*N, N*N)
+    #Z2 = spzeros
+    #[A Z; Z A]
+end
+
+function fullkern(M)
+    A = kern(M)
+    blockdiag(A, A, spzeros(4,4))
 end
