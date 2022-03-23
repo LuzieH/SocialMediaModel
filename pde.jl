@@ -39,8 +39,8 @@ end
 
 
 function second_derivative((N_x,N_y), (dx, dy))
-    M = Tridiagonal(ones(N_x-1), fill(-2., N_x), ones(N_x-1))
     # here matrix should have different shape for Ny not equal Nx
+    M = Tridiagonal(ones(N_x-1), fill(-2., N_x), ones(N_x-1))
     # neumann boundary conditions with zero flux imply (using centered difference) that value of function outside domain
     # equals value of function inside domain (not on boundary), thus the following replacement
     M[1,1] = -1.
@@ -53,6 +53,7 @@ end
 function centered_difference((N_x,N_y), (dx, dy))
     #centered first difference for force, doesnt work for different x, y grids
     C = 1/(2*dx)*Tridiagonal(-ones(N_x-1), zeros(N_x), ones(N_x-1))
+    # at the boundary a one-sided difference scheme is used
     C[1,1:2] = 1/(dx)* [-1,1]
     C[end,end-1:end] = 1/(dx)* [-1,1]
 
@@ -114,7 +115,7 @@ function f(duz,uz,p,t)
         dzi = @view dz[:,i]
 
         force = c * media_force(zi, grid_points, N_x, N_y) + a * Fagent
-        #ensure force is zero at boundary to conserve density - effectivly now the fluxes at boundaries cancel
+        #ensure force is zero at boundary to conserve density - effectivly together with transparent Neumann BCs, now the fluxes at boundaries cancel
         force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0
         div =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
         drho .= D*(M*rho + rho*M') - div
@@ -125,7 +126,6 @@ function f(duz,uz,p,t)
 
 end
 
-
 function solve(tmax=0.1; alg=nothing)
     p = construct() 
     uz0 = initialconditions(p)
@@ -135,6 +135,12 @@ function solve(tmax=0.1; alg=nothing)
     @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
     
     return sol, p
+end
+
+function plot_solution(rho, z, x, y; title="", label="", clim=(-Inf, Inf))
+    subp = heatmap(x,y, rho,title = title, c=:berlin, clims=clim)
+    scatter!(subp, [z[1]], [z[2]], markercolor=[:yellow],markersize=6, lab=label)
+    return subp
 end
 
 function solveplot(tmax=0.1; alg=nothing)
@@ -152,20 +158,13 @@ function solveplot(tmax=0.1; alg=nothing)
     return sol, p
 end
 
-function test_f()
-    p = construct()
-    uz0 = initialconditions(p)
-    duz = copy(uz0)
-    @time f(duz, uz0, p, 0)
-    return duz
-end
-
-function creategif(sol,p,  tmax=0.1, dt=0.01)
+function creategif(sol,p, dt=0.01)
     rho1(t)=sol(t).x[1][:,:,1]
     rho2(t)=sol(t).x[1][:,:,2]
     z1(t)=sol(t).x[2][:,1]
     z2(t)=sol(t).x[2][:,2]
-
+    
+    tmax=sol.t[end]
     (; domain, dx, dy) = p
     x = domain[1,1]:dx:domain[1,2]
     y = domain[2,1]:dy:domain[2,2]
@@ -178,8 +177,10 @@ function creategif(sol,p,  tmax=0.1, dt=0.01)
     Plots.gif(pdegif, "evolution.gif", fps = 30)
 end
 
-function plot_solution(rho, z, x, y; title="", label="", clim=(-Inf, Inf))
-    subp = heatmap(x,y, rho,title = title, c=:berlin, clims=clim)
-    scatter!(subp, [z[1]], [z[2]], markercolor=[:yellow],markersize=6, lab=label)
-    return subp
+function test_f()
+    p = construct()
+    uz0 = initialconditions(p)
+    duz = copy(uz0)
+    @time f(duz, uz0, p, 0)
+    return duz
 end
