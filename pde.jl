@@ -18,6 +18,32 @@ function generate_K(grid_points)
     return k, w
 end
 
+function g(x)
+    if x>0
+        return x
+    else
+        return 0.1
+    end
+end
+
+function gamma(grid_points, rho, y, beta,dV)
+    Nx, Ny, I, J = size(rho)
+    rate = zeros((Nx*Ny, I, J, J))
+    m = dV*sum(rho, dims=(1,2))[1,1,:,:]
+    @inbounds for i=1:I #current attitude
+        for j in 1:J #current influencer
+            for j2 in 1:J #future influencer
+                if j2!=j
+                    for x in 1:Nx*Ny
+                        rate[x,i,j,j2] = exp(-norm(grid_points[x,:]-y[:,j2]))*g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
+                    end
+                end
+            end
+        end
+    end
+    return beta*reshape(rate,(Nx, Ny, I, J, J))
+end
+
 
 function agent_force(rho, K_matrix, W_matrix,  dV)
     force = zeros(size(rho)..., 2)
@@ -31,7 +57,7 @@ function agent_force(rho, K_matrix, W_matrix,  dV)
     return force./reshape(norms, size(rho))
 end
 
-function media_force(z, grid_points, N_x, N_y)
+function follower_force(z, grid_points, N_x, N_y)
     pointwise_int =   z' .- grid_points
     force = reshape(pointwise_int,N_x,N_y, 2)
     return force
@@ -65,15 +91,19 @@ function construct()
     sigma = 1.0
     D = sigma^2 * 0.5
     a = 2.0
+    b = 2.0
     c = 2.0
+    beta = 100.0
     Gamma_0 = 100
-    m = [1/2, 1/2] #proportion of agents of type 1,2
+    gamma_0 = 25
+    J=4 # number of influencers
     dx = 0.05
     dy = dx
     dV = dx*dy
     domain = [-2 2; -2 2]
     N_x = Int((domain[1,2]-domain[1,1])/dx+1)
     N_y = N_x #so far only works if N_y = N_x
+    #TODO: check whether order of x,y in rho is correct!
     N = N_x*N_y
     X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
@@ -84,103 +114,156 @@ function construct()
     M = second_derivative((N_x,N_y), (dx, dy))
     C = centered_difference((N_x,N_y), (dx, dy))
  
-    p = (; grid_points, N_x, N_y, domain,  a, c, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, m, Gamma_0)
+    p = (; grid_points, N_x, N_y, domain,  a, b, c, beta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0)
 
     return p
 end
 
 function initialconditions(p)
-    (; N_x , N_y) = p
-    #rho_0 = cat(1/32*ones(N_x,N_y), 1/32*ones(N_x,N_y), dims=3)
-    rho_0 = fill(1/32, N_x, N_y, 2)
+    (; N_x , N_y,  J) = p
+    rho_0 = zeros(N_x, N_y, 2, 4) 
+    mid_y =Int(round(N_y/2))
+    mid_x =Int(round(N_x/2))
+    rho_0[1:mid_x, 1:mid_y,:,1] .= 1/(2*J*4)
+    rho_0[1:mid_x, mid_y:end,:,2] .= 1/(2*J*4)
+    rho_0[mid_x:end, 1:mid_y,:,3] .= 1/(2*J*4)
+    rho_0[mid_x:end, mid_y:end,:,4] .= 1/(2*J*4)
+    #cat(1/32*ones(N_x,N_y), 1/32*ones(N_x,N_y), dims=3)
+    #rho_0 = fill(1/(2*J*4*4), N_x, N_y, 2, J)
     u0 = rho_0
     z1_0 = [1.,1.]
     z2_0 = [-1.,-1.]
     z0 = [z1_0  z2_0]
-    return ArrayPartition(u0,z0)
+    y1_0 = [-1.,-1.]
+    y2_0 = [1.,-1.]
+    y3_0 = [-1.,1.]
+    y4_0 = [1.,1. ]
+
+    y0 = [y1_0  y2_0 y3_0 y4_0]
+    return ArrayPartition(u0,z0,y0)
 end
 
-function f(duz,uz,p,t)
+function f(duzy,uzy,p,t)
     yield()
-    (; grid_points, N_x, N_y, domain, a, c, K_matrix, W_matrix, dx,dy, dV, C,   D, M , N, m, Gamma_0) = p
-    u, z = uz.x
-    du, dz = duz.x
+    (; grid_points, N_x, N_y, domain,  a, b, c, beta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0) = p
+    u, z, y = uzy.x
+    du, dz, dy = duzy.x
 
-    rhosum = u[:,:,1] + u[:,:,2]
+    rhosum = sum(u, dims=(3,4))[:,:,1,1]
+    rhosum_j = sum(u, dims=3)
+    rhosum_i = sum(u, dims=4)
+    m_i = dV*sum(u,dims = (1,2,4))
+    m_j = dV*sum(u,dims=(1,2,3))
     Fagent = agent_force(rhosum, K_matrix, W_matrix, dV)
+    rate_matrix = gamma(grid_points, u, y, beta,dV)
     for i in 1:2
-        rho = @view  u[:,:,i]
-        drho = @view du[:,:,i]
-        zi = @view z[:,i]
-        dzi = @view dz[:,i]
+        for j in 1:J
+            rho = @view  u[:,:,i,j]
+            drho = @view du[:,:,i,j]
+            zi = @view z[:,i]
+            dzi = @view dz[:,i]
+            yj = @view y[:,j]
+            dyj = @view dy[:,j]
 
-        force = c * media_force(zi, grid_points, N_x, N_y) + a * Fagent
-        #ensure force is zero at boundary to conserve density - effectivly together with transparent Neumann BCs, now the fluxes at boundaries cancel
-        force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0
-        div =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
-        drho .= D*(M*rho + rho*M') - div
+            force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)
+            #ensure force is zero at boundary to conserve density - effectivly together with transparent Neumann BCs, now the fluxes at boundaries cancel
+            force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0
+            div =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
+            reac = zeros(N_x, N_y)
+            for j2=1:J
+                if j2!= J
+                    reac += -rate_matrix[:,:,i,j,j2] .* rho + rate_matrix[:,:,i,j2,j] .* u[:,:,i,j2]
+                end
+            end
+            drho .= D*(M*rho + rho*M') - div + reac
 
-        mean_rho = 1/m[i] * dV*reshape(rho,1,N)*grid_points
-        dzi .= 1/(Gamma_0*m[i]) * (mean_rho' - zi)
+            mean_rhoi = 1/m_i[i] * dV*reshape(rhosum_i[:,:,i,:],1,N)*grid_points
+            dzi .= 1/(Gamma_0*m_i[i]) * (mean_rhoi' - zi)
+
+            mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
+            dyj .= 1/(gamma_0*m_j[j]) * (mean_rhoj' - yj)
+        end
     end
 
 end
 
 function solve(tmax=0.1; alg=nothing)
     p = construct() 
-    uz0 = initialconditions(p)
+    uzy0 = initialconditions(p)
     
     # Solve the ODE
-    prob = ODEProblem(f,uz0,(0.0,tmax),p)
+    prob = ODEProblem(f,uzy0,(0.0,tmax),p)
     @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
     
     return sol, p
 end
 
-function plot_solution(rho, z, x, y; title="", label="", clim=(-Inf, Inf))
-    subp = heatmap(x,y, rho,title = title, c=:berlin, clims=clim)
-    scatter!(subp, [z[1]], [z[2]], markercolor=[:yellow],markersize=6, lab=label)
+function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf))
+    subp = heatmap(x_arr,y_arr, rho, title = title, c=:berlin, clims=clim)
+    scatter!(subp, [z[1]], [z[2]], markercolor=[:yellow],markersize=6, lab=labelz)
+    scatter!(subp, [y[1]], [y[2]], markercolor=[:red],markersize=6, lab=labely)
     return subp
 end
 
 function solveplot(tmax=0.1; alg=nothing)
     sol, p = solve(tmax; alg=nothing)
 
-    (; domain, dx, dy) = p
+    (; domain, dx, dy,J) = p
     #PLOTTING
-    x = domain[1,1]:dx:domain[1,2]
-    y = domain[2,1]:dy:domain[2,2]
-    p1 = plot_solution(sol(tmax).x[1][:,:,1], sol(tmax).x[2][:,1], x, y; title=string("ρ₁(",string(tmax),")"), label="z₁") 
-    p2 = plot_solution(sol(tmax).x[1][:,:,2], sol(tmax).x[2][:,2], x, y; title=string("ρ₋₁(",string(tmax),")"), label="z₋₁")
+    x_arr = domain[1,1]:dx:domain[1,2]
+    y_arr = domain[2,1]:dy:domain[2,2]
+    
+    plot_array = Any[]  
+    z_labels = ["z₁", "z₋₁"]
+    y_labels = ["y₁", "y₂", "y₃", "y₄"]
+    dens_labels = [ "ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"; "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄"]
+    for j in 1:J    
+        for i in 1:2
+            # make a plot and add it to the plot_array
+            push!(plot_array, plot_solution(sol(tmax).x[1][:,:,i,j], sol(tmax).x[2][:,i], sol(tmax).x[3][:,j], x_arr, y_arr; title = string(dens_labels[i,j],"(", string(tmax), ")") ,labely = y_labels[j], labelz = z_labels[i]))
+        end
+    end
+    plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
 
-    plot(p1, p2, layout=[1 1], size=(1000,400)) |> display
+    #p2 = plot_solution(sol(tmax).x[1][:,:,2], sol(tmax).x[2][:,2], x_arr, y_arr; title=string("ρ₋₁(",string(tmax),")"), label="z₋₁")
+
+    #plot(p1, p2, layout=[4 4], size=(1000,4*400)) 
     savefig("finaltime_pde.png")
     return sol, p
 end
-
+ 
 function creategif(sol,p, dt=0.01)
-    rho1(t)=sol(t).x[1][:,:,1]
-    rho2(t)=sol(t).x[1][:,:,2]
-    z1(t)=sol(t).x[2][:,1]
-    z2(t)=sol(t).x[2][:,2]
+    #rho1(t)=sol(t).x[1][:,:,1]
+    #'rho2(t)=sol(t).x[1][:,:,2]
+    #z1(t)=sol(t).x[2][:,1]
+    #z2(t)=sol(t).x[2][:,2]
     
     tmax=sol.t[end]
-    (; domain, dx, dy) = p
-    x = domain[1,1]:dx:domain[1,2]
-    y = domain[2,1]:dy:domain[2,2]
+    (; domain, dx, dy, J) = p
+    x_arr = domain[1,1]:dx:domain[1,2]
+    y_arr = domain[2,1]:dy:domain[2,2]
     cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
+    z_labels = ["z₁", "z₋₁"]
+    y_labels = ["y₁", "y₂", "y₃", "y₄"]
+    dens_labels = [ "ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"; "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄"]
+
     pdegif = @animate for t = 0:dt:tmax
-        p1 = plot_solution(rho1(t), z1(t), x, y; title=string("ρ₁(",string(t),")"), label="z₁", clim = cl) 
-        p2 = plot_solution(rho2(t), z2(t), x, y; title=string("ρ₋₁(",string(t),")"), label="z₋₁",clim= cl)
-        plot(p1, p2, layout=[1 1], size=(1000,400))
+        plot_array = Any[]  
+        for j in 1:J    
+            for i in 1:2
+                # make a plot and add it to the plot_array
+                push!(plot_array, plot_solution(sol(t).x[1][:,:,i,j], sol(t).x[2][:,i], sol(t).x[3][:,j], x_arr, y_arr; title = string(dens_labels[i,j],"(", string(t), ")") ,labely = y_labels[j], labelz = z_labels[i], clim = cl))
+            end
+        end
+        plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
     end
     Plots.gif(pdegif, "evolution.gif", fps = 30)
 end
 
 function test_f()
     p = construct()
-    uz0 = initialconditions(p)
-    duz = copy(uz0)
-    @time f(duz, uz0, p, 0)
-    return duz
+    uzy0 = initialconditions(p)
+    duzy = copy(uzy0)
+    @time f(duzy, uzy0, p, 0)
+    return duzy
 end
