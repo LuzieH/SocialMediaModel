@@ -67,8 +67,7 @@ end
 function second_derivative((N_x,N_y), (dx, dy))
     # here matrix should have different shape for Ny not equal Nx
     M = Tridiagonal(ones(N_x-1), fill(-2., N_x), ones(N_x-1))
-    # neumann boundary conditions with zero flux imply (using centered difference) that value of function outside domain
-    # equals value of function inside domain (not on boundary), thus the following replacement
+    # boundary conditions change in time to ensure flux balance, they are added when solving pde
     M[1,1] = -1.
     M[end,end] = -1.
     M .= (1/dx^2)*M
@@ -103,7 +102,6 @@ function construct()
     domain = [-2 2; -2 2]
     N_x = Int((domain[1,2]-domain[1,1])/dx+1)
     N_y = N_x #so far only works if N_y = N_x
-    #TODO: check whether order of x,y in rho is correct!
     N = N_x*N_y
     X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
@@ -135,8 +133,8 @@ function initialconditions(p)
     z2_0 = [-1.,-1.]
     z0 = [z1_0  z2_0]
     y1_0 = [-1.,-1.]
-    y2_0 = [1.,-1.]
-    y3_0 = [-1.,1.]
+    y2_0 = [-1.,1.]
+    y3_0 = [1.,-1.]
     y4_0 = [1.,1. ]
 
     y0 = [y1_0  y2_0 y3_0 y4_0]
@@ -146,8 +144,8 @@ end
 function f(duzy,uzy,p,t)
     yield()
     (; grid_points, N_x, N_y, domain,  a, b, c, beta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0) = p
-    u, z, y = uzy.x
-    du, dz, dy = duzy.x
+    u, z, y2 = uzy.x
+    du, dz, dy2 = duzy.x
 
     rhosum = sum(u, dims=(3,4))[:,:,1,1]
     rhosum_j = sum(u, dims=3)
@@ -155,19 +153,20 @@ function f(duzy,uzy,p,t)
     m_i = dV*sum(u,dims = (1,2,4))
     m_j = dV*sum(u,dims=(1,2,3))
     Fagent = agent_force(rhosum, K_matrix, W_matrix, dV)
-    rate_matrix = gamma(grid_points, u, y, beta,dV)
+    rate_matrix = gamma(grid_points, u, y2, beta,dV)
     for i in 1:2
         for j in 1:J
             rho = @view  u[:,:,i,j]
             drho = @view du[:,:,i,j]
             zi = @view z[:,i]
             dzi = @view dz[:,i]
-            yj = @view y[:,j]
-            dyj = @view dy[:,j]
+            yj = @view y2[:,j]
+            dyj = @view dy2[:,j]
 
             force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)
-            #ensure force is zero at boundary to conserve density - effectivly together with transparent Neumann BCs, now the fluxes at boundaries cancel
-            force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0
+            ##ensure force is zero at boundary to conserve density - effectivly together with transparent Neumann BCs, now the fluxes at boundaries cancel
+            #force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0            
+            
             div =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
             reac = zeros(N_x, N_y)
             for j2=1:J
@@ -175,7 +174,15 @@ function f(duzy,uzy,p,t)
                     reac += -rate_matrix[:,:,i,j,j2] .* rho + rate_matrix[:,:,i,j2,j] .* u[:,:,i,j2]
                 end
             end
-            drho .= D*(M*rho + rho*M') - div + reac
+            
+            dif = D*(M*rho + rho*M')  
+            #balance fluxes at boundary
+            dif[1,:]+= -D/dx * (force[1,:,1].*rho[1,:]) 
+            dif[end,:]+= D/dx * (force[end,:,1].*rho[end,:])
+            dif[:,1]+= -D/dy * (force[:,1,2].*rho[:,1])
+            dif[:,end]+= D/dy * (force[:,end,2].*rho[:,end])
+
+            drho .=  dif - div + reac
 
             mean_rhoi = 1/m_i[i] * dV*reshape(rhosum_i[:,:,i,:],1,N)*grid_points
             dzi .= 1/(Gamma_0*m_i[i]) * (mean_rhoi' - zi)
@@ -199,7 +206,7 @@ function solve(tmax=0.1; alg=nothing)
 end
 
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf))
-    subp = heatmap(x_arr,y_arr, rho, title = title, c=:berlin, clims=clim)
+    subp = heatmap(x_arr,y_arr, rho', title = title, c=:berlin, clims=clim)
     scatter!(subp, [z[1]], [z[2]], markercolor=[:yellow],markersize=6, lab=labelz)
     scatter!(subp, [y[1]], [y[2]], markercolor=[:red],markersize=6, lab=labely)
     return subp
