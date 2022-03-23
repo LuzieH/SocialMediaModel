@@ -171,7 +171,7 @@ function f(duzy,uzy,p,t)
             div =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
             reac = zeros(N_x, N_y)
             for j2=1:J
-                if j2!= J
+                if j2!= j
                     reac += -rate_matrix[:,:,i,j,j2] .* rho + rate_matrix[:,:,i,j2,j] .* u[:,:,i,j2]
                 end
             end
