@@ -136,15 +136,13 @@ function f(duz,uz,p,t)
 end
 
 
-function solve(tmax=0.01)
-    
+function solve(tmax=0.01; alg=nothing)
     p = construct()
-   
     uz0 = initialconditions(p)
+
     # Solve the ODE
     prob = ODEProblem(f,uz0,(0.0,tmax),p)
-    
-    @time sol = DifferentialEquations.solve(prob ,progress=true,save_everystep=true,save_start=false)
+    @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
 
     p1 = heatmap(sol[end].x[1][:,:,1],title = "rho_1")
     p2 = heatmap(sol[end].x[1][:,:,2],title = "rho_{-1}")
