@@ -1,4 +1,4 @@
-function force = influence(x,media,influencer,B,n,state,a,b)
+function force = influence(x,media,influencer,B,n,state,b,c)
 force1 =zeros(size(x));
 force2 =zeros(size(x));
 for j=1:n
