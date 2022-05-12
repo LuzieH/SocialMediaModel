@@ -288,11 +288,11 @@ function plot_ensemble(us, zs, ys, p)
         end
     end
     plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
-    savefig("ensemble_average_agents.png")
+    savefig("img/ensemble_average_agents.png")
     
     y_all = reshape(ys, (2, N*J))
     plot(histogram2d(y_all[1,:], y_all[2,:], bins=(-2:0.1:2, -2:0.1:2)), title="Final distribution of influencers") |> display
-    savefig("influencer_dist.png")
+    savefig("img/influencer_dist.png")
 end
 
 
@@ -333,7 +333,7 @@ function solveplot(tmax=0.1; alg=nothing)
 
     #p2 = plot_solution(sol(tmax).x[1][:,:,2], sol(tmax).x[2][:,2], x_arr, y_arr; title=string("ρ₋₁(",string(tmax),")"), label="z₋₁")
     #plot(p1, p2, layout=[4 4], size=(1000,4*400)) 
-    savefig("finaltime_pde.png")
+    savefig("img/finaltime_pde.png")
     return sol, p
 end
  
@@ -362,7 +362,7 @@ function creategif(sol,p, dt=0.01)
         end
         plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
     end
-    Plots.gif(pdegif, "evolution.gif", fps = 30)
+    Plots.gif(pdegif, "img/evolution.gif", fps = 30)
 end
 
 function test_f()

@@ -67,7 +67,7 @@ plot(media(1,:),media(2,:),'k+');
 plot(influencer(1,:),influencer(2,:),'go');
 axis([-2 2 -2 2]);
 if count<9
-    print('-dpng',['initial' int2str(count) '.png']);
+    print('-dpng',['img/initial' int2str(count) '.png']);
 end
 
 % performing the simulation loop
@@ -157,11 +157,11 @@ end %(end of simulation loop)
 
 if count<9
     figure(1)
-    print('-dpng',['final' int2str(count) '.png']); 
+    print('-dpng',['img/final' int2str(count) '.png']); 
     xxx = xx(:,:,NT);
-    save(['finalstate' int2str(count) '.mat'],'xxx','influencer','media','followers','state','Net','In1','In2','In3','In4');
+    save(['data/finalstate' int2str(count) '.mat'],'xxx','influencer','media','followers','state','Net','In1','In2','In3','In4');
     figure(37)
-    print('-dpng',['finalInfluencerDistri' int2str(count) '.png']); 
+    print('-dpng',['img/finalInfluencerDistri' int2str(count) '.png']); 
 end
 
 figure(10)
@@ -170,20 +170,20 @@ surf(x1,x2,Distri1');
 title(['c=' int2str(count)]);
 view(2);
 colorbar
-print('-dpng','histblue.png'); 
+print('-dpng','img/histblue.png'); 
 figure(11)
 clf
 surf(x1,x2,Distri2');
 view(2);
 colorbar
 title(['c=' int2str(count)]);
-print('-dpng','histred.png'); 
+print('-dpng','img/histred.png'); 
 figure(12)
 clf
 surf(x1,x2,DistriI');
 view(2);
 colorbar
 title(['c=' int2str(count)]);
-print('-dpng','histinf.png'); 
+print('-dpng','img/histinf.png'); 
 
 end
