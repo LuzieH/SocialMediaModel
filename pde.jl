@@ -20,7 +20,7 @@ end
 
 function g(x)
     if x>0
-        return x
+        return 0.1+x
     else
         return 0.1
     end
@@ -92,7 +92,7 @@ function construct()
     a = 2.0
     b = 2.0
     c = 2.0
-    beta = 50.0
+    beta = 20.0
     Gamma_0 = 100
     gamma_0 = 25
     J=4 # number of influencers
@@ -141,6 +141,48 @@ function initialconditions(p)
     return ArrayPartition(u0,z0,y0)
 end
 
+#gaussian that integrates to 1 and centered at center
+gaussian(x,center, sigma=0.15) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
+
+function random_initialconditions(p)
+    
+    (; grid_points, N_x , N_y,  dV, J) = p
+    random_pos = rand(128,2).*4 .-2 #128 uniform samples in domain
+    rho_0 = zeros(N_x, N_y, 2, 4) 
+    counts = [0 0 0 0]
+    y0 = zeros(2,4)
+    for i in 1:128
+        if random_pos[i,1]<0
+            if random_pos[i,2]<0
+                rho_0[:,:,rand([1,2]),1]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
+                counts[1]+=1
+                y0[:,1]+=random_pos[i,:]
+            else
+                rho_0[:,:,rand([1,2]),2]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
+                counts[2]+=1
+                y0[:,2]+=random_pos[i,:]
+            end
+        else
+            if random_pos[i,2]<0
+                rho_0[:,:, rand([1,2]),3]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
+                counts[3]+=1
+                y0[:,3]+=random_pos[i,:]
+            else
+                rho_0[:,:, rand([1,2]), 4]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
+                counts[4]+=1
+                y0[:,4]+=random_pos[i,:]
+            end
+        end
+    end
+    rho_0 = rho_0/(sum(rho_0)*dV)
+    u0 = rho_0
+    z1_0 = [1.,1.]
+    z2_0 = [-1.,-1.]
+    z0 = [z1_0  z2_0]
+    y0= y0./counts
+    return ArrayPartition(u0,z0,y0)
+end
+
 function f(duzy,uzy,p,t)
     yield()
     (; grid_points, N_x, N_y, domain,  a, b, c, beta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0) = p
@@ -163,9 +205,7 @@ function f(duzy,uzy,p,t)
             yj = @view y2[:,j]
             dyj = @view dy2[:,j]
 
-            force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)
-            ##ensure force is zero at boundary to conserve density - effectivly together with transparent Neumann BCs, now the fluxes at boundaries cancel
-            #force[1,:,:] .= force[end,:,:] .= force[:,1,:] .= force[:,end,:].=0            
+            force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)            
             
             div =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
             reac = zeros(N_x, N_y)
@@ -176,7 +216,7 @@ function f(duzy,uzy,p,t)
             end
             
             dif = D*(M*rho + rho*M')  
-            #balance fluxes at boundary
+            #balance fluxes at boundary (part of boundady conditions)
             dif[1,:]+= -D/dx * (force[1,:,1].*rho[1,:]) 
             dif[end,:]+= D/dx * (force[end,:,1].*rho[end,:])
             dif[:,1]+= -D/dy * (force[:,1,2].*rho[:,1])
@@ -194,16 +234,67 @@ function f(duzy,uzy,p,t)
 
 end
 
-function solve(tmax=0.1; alg=nothing)
-    p = construct() 
-    uzy0 = initialconditions(p)
+function solve(tmax=0.1; alg=nothing, init="random", p = construct())
+    
+    if init=="random"
+        uzy0 = random_initialconditions(p)
+    else
+        uzy0 = initialconditions(p)
+    end
     
     # Solve the ODE
     prob = ODEProblem(f,uzy0,(0.0,tmax),p)
-    @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=false)
+    @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=true)
     
     return sol, p
 end
+
+function ensemble(tmax=0.1, N=10; alg=nothing, init="random")
+    zs = Any[]
+    ys = Any[]
+    us = Any[]
+    p = construct()
+    for i=1:N
+        sol,p = solve(tmax; alg=alg, init=init, p=p)
+        push!(us, sol(tmax).x[1])
+        push!(zs, sol(tmax).x[2])
+        push!(ys, sol(tmax).x[3])
+    end
+    return us, zs, ys
+end
+
+function plot_ensemble(us, zs, ys, p)
+    ys = cat(ys..., dims=3)
+    N=size(ys)[3]
+    zs = cat(zs..., dims=3)
+    us = cat(us...,dims=5)
+    av_u = sum(us,dims=5)*(1/N)
+
+    (; domain, dx, dy,J) = p
+
+    #PLOTTING
+    x_arr = domain[1,1]:dx:domain[1,2]
+    y_arr = domain[2,1]:dy:domain[2,2]
+    
+    plot_array = Any[]  
+    z_labels = ["z₁", "z₋₁"]
+    y_labels = ["y₁", "y₂", "y₃", "y₄"]
+    dens_labels = [ "ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"; "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄"]
+    for j in 1:J    
+        for i in 1:2
+            # make a plot and add it to the plot_array
+            push!(plot_array, plot_solution2(av_u[:,:,i,j], zs[:,i,:], ys[:,j,:], x_arr, y_arr; title = string(dens_labels[i,j]) ,labely = y_labels[j], labelz = z_labels[i]))
+ 
+        end
+    end
+    plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
+    savefig("ensemble_average_agents.png")
+    
+    y_all = reshape(ys, (2, N*J))
+    plot(histogram2d(y_all[1,:], y_all[2,:], bins=(-2:0.1:2, -2:0.1:2)), title="Final distribution of influencers") |> display
+    savefig("influencer_dist.png")
+end
+
 
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf))
     subp = heatmap(x_arr,y_arr, rho', title = title, c=:berlin, clims=clim)
@@ -212,8 +303,16 @@ function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", 
     return subp
 end
 
+function plot_solution2(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf))
+    subp = heatmap(x_arr,y_arr, rho', title = title, c=:berlin, clims=clim)
+    scatter!(subp, z[1,:], z[2,:], markercolor=[:yellow],markersize=6, lab=labelz)
+    scatter!(subp, y[1,:], y[2,:], markercolor=[:red],markersize=6, lab=labely)
+    return subp
+end
+
 function solveplot(tmax=0.1; alg=nothing)
     sol, p = solve(tmax; alg=nothing)
+
 
     (; domain, dx, dy,J) = p
     #PLOTTING
@@ -233,7 +332,6 @@ function solveplot(tmax=0.1; alg=nothing)
     plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
 
     #p2 = plot_solution(sol(tmax).x[1][:,:,2], sol(tmax).x[2][:,2], x_arr, y_arr; title=string("ρ₋₁(",string(tmax),")"), label="z₋₁")
-
     #plot(p1, p2, layout=[4 4], size=(1000,4*400)) 
     savefig("finaltime_pde.png")
     return sol, p
