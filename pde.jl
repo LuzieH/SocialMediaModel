@@ -92,7 +92,7 @@ function construct()
     a = 2.0
     b = 2.0
     c = 2.0
-    beta = 100.0
+    beta = 50.0
     Gamma_0 = 100
     gamma_0 = 25
     J=4 # number of influencers

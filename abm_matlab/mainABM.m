@@ -1,15 +1,16 @@
 clear all
 % Prepare grid for distribution over many simulations
 hGrid = 0.2;
+Nsim=10;
 maxNr = fix(4/hGrid);
 Distri1 = zeros(maxNr,maxNr);
 Distri2 = zeros(maxNr,maxNr);
 DistriI = zeros(maxNr,maxNr);
-x1=-2+hGrid/2:hGrid:2-hGrid/2;
+x1=-2+hGrid/2:hGrid:2-hGrid/2; %TODO: better with full interval (-2,2)
 x2=-2+hGrid/2:hGrid:2-hGrid/2;
 
 % repetition of ABM simulations
-for count=1:10
+for count=1:Nsim
     
 % initialize number and opinions of agents
 n =128;
@@ -21,10 +22,12 @@ In1 = find((x(1,:)>0) & (x(2,:)>0));
 In2 = find((x(1,:)<=0) & (x(2,:)>0));
 In3 = find((x(1,:)>0) & (x(2,:)<=0));
 In4 = find((x(1,:)<=0) & (x(2,:)<=0));
+%initial opinions of influencers
 influencer(:,1) = sum(x(:,In1)')'/length(In1);
 influencer(:,2) = sum(x(:,In2)')'/length(In2);
 influencer(:,3) = sum(x(:,In3)')'/length(In3);
 influencer(:,4) = sum(x(:,In4)')'/length(In4);
+%follower network
 followers=zeros(4,n);
 followers(1,In1)=1;
 followers(2,In2)=1;
@@ -32,25 +35,26 @@ followers(3,In3)=1;
 followers(4,In4)=1;
 
 % initialization of political attitude state of all agents
-state = 4*rand(1,n)-2*ones(1,n);
+state = rand(1,n)-0.5; %check if still correct!
 state = sign(state);
 I1 = find(state==-1);
 I2 = find(state==1);
 
 % initialization of interaction network between agents 
 %Net = InitialNet(n,x);  % if based on closeness of opinions
-Net = ones(n,n);  % everyone connected to everyone
+Net = ones(n,n);  % everyone connected to everyone, CHECK selfconnections??
 
 % setting model and simulation parameters
-sigma=0.25; % noise on individual agents
-sigmatilde=0; % noise on influencers
+sigma=0.25; % noise on individual agents %CHECK
+sigmahat=0; % noise on influencers
+sigmatilde=0; %noise on media
 dt=0.01;  % simulation stepsize
-anz=100;  % simulation time T=anz*dt
-a=1; % interaction strength between agents
+NT=100;  % simulation time T=NT*dt
+a=1; % interaction strength between agents CHECK
 b=2; % interaction strength between agents and influencers
 c=2; % interaction strength between agents and media
 
-xx=zeros(2,n,anz);
+xx=zeros(2,n,NT);
 xx(:,:,1)=x;  % xx will store the entire trajectory of opinions
 
 % Display of initial configuration
@@ -67,10 +71,10 @@ if count<9
 end
 
 % performing the simulation loop
-for k=2:anz
+for k=2:NT
     % opinions change due to opinions of friends, influencers and media
-    force = 0.1 * xx(:,:,k-1) + a * attraction(xx(:,:,k-1),Net,n) + influence(xx(:,:,k-1),media,influencer,followers,n,state,b,c);
-    xx(:,1:n,k) = xx(:,1:n,k-1) - dt*force(:,1:n) + sqrt(dt*sigma)*randn(2,n); % new individual opinions
+    force = a * attraction(xx(:,:,k-1),Net,n) + influence(xx(:,:,k-1),media,influencer,followers,n,state,b,c); %first term deleted
+    xx(:,1:n,k) = xx(:,1:n,k-1) + dt*force(:,1:n) + sqrt(dt*sigma)*randn(2,n); % new individual opinions
     
     % influencer opinions adapt slowly to opinions of followers with friction
     % depending on number of followers
@@ -80,22 +84,20 @@ for k=2:anz
     masscenter(:,4) = sum(xx(:,In4,k)')'/length(In4);
     for i=1:4
         if sum(followers(i,:))>0 
-            frictionI = 25; %%%%%
-            %influencer(:,i) = exp(-dt/frictionI) *(influencer(:,i)-masscenter(:,i)) + masscenter(:,i);  % case without noise
-            influencer(:,i) =  influencer(:,i)  - dt/frictionI * (influencer(:,i)-masscenter(:,i)) + sqrt(dt*sigmatilde)*randn(2,1);
-        else
-            influencer(:,i)=influencer(:,i);
+            frictionI = 25; %%%%% CHECK
+            influencer(:,i) =  influencer(:,i)  + dt/frictionI * (-influencer(:,i)+masscenter(:,i)) + 1/frictionI*sqrt(dt*sigmahat)*randn(2,1);
         end
     end
     
     % media opinions change very slowly based on opinions of followers with friction
     % depending on number of followers
-    massmedia(:,1) = sum(xx(:,I1,k)')'/length(I1);
+    massmedia(:,1) = sum(xx(:,I1,k)')'/length(I1); %CHECK k-1??
     massmedia(:,2) = sum(xx(:,I2,k)')'/length(I2);
     friction = 100; %%%%%
-    media(:,1) = exp(-dt/friction) * (media(:,1)-massmedia(:,1)) + massmedia(:,1);
-    friction = 100; %%%%%
-    media(:,2) = exp(-dt/friction) * (media(:,2)-massmedia(:,2)) + massmedia(:,2);
+    for i=1:2
+        media(:,i) = media(:,i)  + dt/friction * (-media(:,i)+massmedia(:,i)) + 1/friction * sqrt(dt*sigmatilde)*randn(2,1);
+    end
+    % exp(-dt/friction) * (media(:,1)-massmedia(:,1)) + massmedia(:,1); %CHECK Friction Term
     
 
     %% individual may jump from one influencer to another
@@ -156,7 +158,7 @@ end %(end of simulation loop)
 if count<9
     figure(1)
     print('-dpng',['final' int2str(count) '.png']); 
-    xxx = xx(:,:,anz);
+    xxx = xx(:,:,NT);
     save(['finalstate' int2str(count) '.mat'],'xxx','influencer','media','followers','state','Net','In1','In2','In3','In4');
     figure(37)
     print('-dpng',['finalInfluencerDistri' int2str(count) '.png']); 

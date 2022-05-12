@@ -1,6 +1,6 @@
 function [follow,In1,In2,In3,In4] = ChangeInfluencerNetwork2(state,x,n,followers,influencer,dt);
 
-beta = 50;
+eta = 50;
 
 %%%Version based on rates
 follow = followers;
@@ -26,26 +26,24 @@ for j=1:n
     for i=1:4
         g = state(j)*fraction(i);
         if g<0 
-            g=0.0001;
+            g=0.1;
+        else
+            g+=0.1
         end
-        attractive(j,i)= beta * distance(j,i)*g;
+        attractive(j,i)= eta * distance(j,i)*g;
     end
     r=rand;
     alpha=-log(1-r); %random number distributed due to exp(1)
     lambda = sum(attractive(j,:)); %total jump rate
-    if lambda*dt>alpha
+    if lambda*dt>alpha %CHECK should be lamda*dt > r ??
         p = attractive(j,:)/lambda;
-        r=rand;
+        r2=rand;
         k=1;
-        while sum(p(1:k))<r
+        while sum(p(1:k))<r2
             k=k+1;
         end
         follow(:,j)=[0 0 0 0]';        
         follow(k,j)=1;
-%         if follow(k,j)~=followers(k,j)
-%             disp(['agent ' int2str(j) ' changed influencer']);
-%         end
-
     end
 end
 
