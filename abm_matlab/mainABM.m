@@ -66,9 +66,9 @@ plot(x(1,I2),x(2,I2),'ro');
 plot(media(1,:),media(2,:),'k+');
 plot(influencer(1,:),influencer(2,:),'go');
 axis([-2 2 -2 2]);
-if count<9
-    print('-dpng',['img/initial' int2str(count) '.png']);
-end
+% if count<9
+%     print('-dpng',['img/initial' int2str(count) '.png']);
+% end
 
 % performing the simulation loop
 for k=2:NT
@@ -105,85 +105,85 @@ for k=2:NT
     [followers,In1,In2,In3,In4] = ChangeInfluencerNetwork2(state,xx(:,:,k),n,followers,influencer,dt);
 
     %graphical display of configuration after each timestep
-    figure(1)
-    hold off
-    clf
-    plot(xx(1,I1,k),xx(2,I1,k),'bo'); hold on
-    plot(xx(1,I2,k),xx(2,I2,k),'ro');
-    %plot(xx(1,In1,k),xx(2,In1,k),'k+');
-    plot(influencer(1,:),influencer(2,:),'go');
-    plot(media(1,:),media(2,:),'k+');
-    axis([-2 2 -2 2]);
-    pause(0.1)
+    % figure(1)
+    % hold off
+    % clf
+    % plot(xx(1,I1,k),xx(2,I1,k),'bo'); hold on
+    % plot(xx(1,I2,k),xx(2,I2,k),'ro');
+    % %plot(xx(1,In1,k),xx(2,In1,k),'k+');
+    % plot(influencer(1,:),influencer(2,:),'go');
+    % plot(media(1,:),media(2,:),'k+');
+    % axis([-2 2 -2 2]);
+    % pause(0.1)
     
   %% displaying influencer statistics: individual agents are colored wrt the influencer they are following
-figure(37)
-clf
-In1b=find(state(In1)==-1);
-subplot(4,2,1); plot(xx(1,In1(In1b),k),xx(2,In1(In1b),k),'bo',media(1,1),media(2,1),'k+',influencer(1,1),influencer(2,1),'go'); title('state=-1,Influencer 1');
-axis([-2 2 -2 2]);
-In1r=find(state(In1)==1);
-subplot(4,2,2); plot(xx(1,In1(In1r),k),xx(2,In1(In1r),k),'ro',media(1,2),media(2,2),'k+',influencer(1,1),influencer(2,1),'go'); title('state=+1,Influencer 1');
-axis([-2 2 -2 2]);
+% figure(37)
+% clf
+% In1b=find(state(In1)==-1);
+% subplot(4,2,1); plot(xx(1,In1(In1b),k),xx(2,In1(In1b),k),'bo',media(1,1),media(2,1),'k+',influencer(1,1),influencer(2,1),'go'); title('state=-1,Influencer 1');
+% axis([-2 2 -2 2]);
+% In1r=find(state(In1)==1);
+% subplot(4,2,2); plot(xx(1,In1(In1r),k),xx(2,In1(In1r),k),'ro',media(1,2),media(2,2),'k+',influencer(1,1),influencer(2,1),'go'); title('state=+1,Influencer 1');
+% axis([-2 2 -2 2]);
 
-In2b=find(state(In2)==-1);
-subplot(4,2,3); plot(xx(1,In2(In2b),k),xx(2,In2(In2b),k),'bo',media(1,1),media(2,1),'k+',influencer(1,2),influencer(2,2),'go'); title('state=-1,Influencer 2');
-axis([-2 2 -2 2]);
-In2r=find(state(In2)==1);
-subplot(4,2,4); plot(xx(1,In2(In2r),k),xx(2,In2(In2r),k),'ro',media(1,2),media(2,2),'k+',influencer(1,2),influencer(2,2),'go'); title('state=+1,Influencer 2');
-axis([-2 2 -2 2]);
+% In2b=find(state(In2)==-1);
+% subplot(4,2,3); plot(xx(1,In2(In2b),k),xx(2,In2(In2b),k),'bo',media(1,1),media(2,1),'k+',influencer(1,2),influencer(2,2),'go'); title('state=-1,Influencer 2');
+% axis([-2 2 -2 2]);
+% In2r=find(state(In2)==1);
+% subplot(4,2,4); plot(xx(1,In2(In2r),k),xx(2,In2(In2r),k),'ro',media(1,2),media(2,2),'k+',influencer(1,2),influencer(2,2),'go'); title('state=+1,Influencer 2');
+% axis([-2 2 -2 2]);
 
-In3b=find(state(In3)==-1);
-subplot(4,2,5); plot(xx(1,In3(In3b),k),xx(2,In3(In3b),k),'bo',media(1,1),media(2,1),'k+',influencer(1,3),influencer(2,3),'go'); title('state=-1,Influencer 3');
-axis([-2 2 -2 2]);
-In3r=find(state(In3)==1);
-subplot(4,2,6); plot(xx(1,In3(In3r),k),xx(2,In3(In3r),k),'ro',media(1,2),media(2,2),'k+',influencer(1,3),influencer(2,3),'go'); title('state=+1,Influencer 3');
-axis([-2 2 -2 2]);
+% In3b=find(state(In3)==-1);
+% subplot(4,2,5); plot(xx(1,In3(In3b),k),xx(2,In3(In3b),k),'bo',media(1,1),media(2,1),'k+',influencer(1,3),influencer(2,3),'go'); title('state=-1,Influencer 3');
+% axis([-2 2 -2 2]);
+% In3r=find(state(In3)==1);
+% subplot(4,2,6); plot(xx(1,In3(In3r),k),xx(2,In3(In3r),k),'ro',media(1,2),media(2,2),'k+',influencer(1,3),influencer(2,3),'go'); title('state=+1,Influencer 3');
+% axis([-2 2 -2 2]);
 
-In4b=find(state(In4)==-1);
-subplot(4,2,7); plot(xx(1,In4(In4b),k),xx(2,In4(In4b),k),'bo',media(1,1),media(2,1),'k+',influencer(1,4),influencer(2,4),'go'); title('state=-1,Influencer 4');
-axis([-2 2 -2 2]);
-In4r=find(state(In4)==1);
-subplot(4,2,8); plot(xx(1,In4(In4r),k),xx(2,In4(In4r),k),'ro',media(1,2),media(2,2),'k+',influencer(1,4),influencer(2,4),'go'); title('state=+1,Influencer 4');
-axis([-2 2 -2 2]);
-pause(0.1)
-end %(end of simulation loop)
+% In4b=find(state(In4)==-1);
+% subplot(4,2,7); plot(xx(1,In4(In4b),k),xx(2,In4(In4b),k),'bo',media(1,1),media(2,1),'k+',influencer(1,4),influencer(2,4),'go'); title('state=-1,Influencer 4');
+% axis([-2 2 -2 2]);
+% In4r=find(state(In4)==1);
+% subplot(4,2,8); plot(xx(1,In4(In4r),k),xx(2,In4(In4r),k),'ro',media(1,2),media(2,2),'k+',influencer(1,4),influencer(2,4),'go'); title('state=+1,Influencer 4');
+% axis([-2 2 -2 2]);
+% pause(0.1)
+% end %(end of simulation loop)
 
 
-% the following lines do only produce statistics across the final configurations of all simulations
+% % the following lines do only produce statistics across the final configurations of all simulations
 
-%update histogram of opinions
-[Distri1,Distri2,DistriI] = updateDistribution(xx(:,:,k),influencer,n,I1,I2,hGrid,Distri1,Distri2,DistriI);
+% %update histogram of opinions
+% [Distri1,Distri2,DistriI] = updateDistribution(xx(:,:,k),influencer,n,I1,I2,hGrid,Distri1,Distri2,DistriI);
 
-if count<9
-    figure(1)
-    print('-dpng',['img/final' int2str(count) '.png']); 
-    xxx = xx(:,:,NT);
-    save(['data/finalstate' int2str(count) '.mat'],'xxx','influencer','media','followers','state','Net','In1','In2','In3','In4');
-    figure(37)
-    print('-dpng',['img/finalInfluencerDistri' int2str(count) '.png']); 
-end
+% if count<9
+%     figure(1)
+%     print('-dpng',['img/final' int2str(count) '.png']); 
+%     xxx = xx(:,:,NT);
+%     save(['data/finalstate' int2str(count) '.mat'],'xxx','influencer','media','followers','state','Net','In1','In2','In3','In4');
+%     figure(37)
+%     print('-dpng',['img/finalInfluencerDistri' int2str(count) '.png']); 
+% end
 
-figure(10)
-clf
-surf(x1,x2,Distri1');
-title(['c=' int2str(count)]);
-view(2);
-colorbar
-print('-dpng','img/histblue.png'); 
-figure(11)
-clf
-surf(x1,x2,Distri2');
-view(2);
-colorbar
-title(['c=' int2str(count)]);
-print('-dpng','img/histred.png'); 
-figure(12)
-clf
-surf(x1,x2,DistriI');
-view(2);
-colorbar
-title(['c=' int2str(count)]);
-print('-dpng','img/histinf.png'); 
+% figure(10)
+% clf
+% surf(x1,x2,Distri1');
+% title(['c=' int2str(count)]);
+% view(2);
+% colorbar
+% print('-dpng','img/histblue.png'); 
+% figure(11)
+% clf
+% surf(x1,x2,Distri2');
+% view(2);
+% colorbar
+% title(['c=' int2str(count)]);
+% print('-dpng','img/histred.png'); 
+% figure(12)
+% clf
+% surf(x1,x2,DistriI');
+% view(2);
+% colorbar
+% title(['c=' int2str(count)]);
+% print('-dpng','img/histinf.png'); 
 
 end

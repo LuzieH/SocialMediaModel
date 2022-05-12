@@ -33,9 +33,9 @@ for j=1:n
         attractive(j,i)= eta * distance(j,i)*g;
     end
     r=rand;
-    alpha=-log(1-r); %random number distributed due to exp(1)
     lambda = sum(attractive(j,:)); %total jump rate
-    if lambda*dt>alpha %CHECK should be lamda*dt > r ??
+    alpha=-log(1-r)/lambda; %random number distributed due to exp(lambda)
+    if dt>alpha 
         p = attractive(j,:)/lambda;
         r2=rand;
         k=1;
