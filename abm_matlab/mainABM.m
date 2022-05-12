@@ -45,7 +45,7 @@ I2 = find(state==1);
 Net = ones(n,n);  % everyone connected to everyone, CHECK selfconnections??
 
 % setting model and simulation parameters
-sigma=0.25; % noise on individual agents %CHECK
+sigma=0.5; % noise on individual agents %CHECK
 sigmahat=0; % noise on influencers
 sigmatilde=0; %noise on media
 dt=0.01;  % simulation stepsize

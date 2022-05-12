@@ -1,7 +1,7 @@
 function [follow,In1,In2,In3,In4] = ChangeInfluencerNetwork2(state,x,n,followers,influencer,dt);
 
 eta = 50;
-
+theta =0.1
 %%%Version based on rates
 follow = followers;
 
@@ -26,9 +26,9 @@ for j=1:n
     for i=1:4
         g = state(j)*fraction(i);
         if g<0 
-            g=0.1;
+            g=theta;
         else
-            g+=0.1
+            g+=theta
         end
         attractive(j,i)= eta * distance(j,i)*g;
     end

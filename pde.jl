@@ -26,7 +26,7 @@ function g(x)
     end
 end
 
-function gamma(grid_points, rho, y, beta,dV)
+function gamma(grid_points, rho, y, eta,dV)
     Nx, Ny, I, J = size(rho)
     rate = zeros((Nx*Ny, I, J, J))
     m = dV*sum(rho, dims=(1,2))[1,1,:,:]
@@ -41,7 +41,7 @@ function gamma(grid_points, rho, y, beta,dV)
             end
         end
     end
-    return beta*reshape(rate,(Nx, Ny, I, J, J))
+    return eta*reshape(rate,(Nx, Ny, I, J, J))
 end
 
 
@@ -87,12 +87,12 @@ end
 
 function construct()
     # Define the constants for the PDE
-    sigma = 1.0
+    sigma = 0.5
     D = sigma^2 * 0.5
-    a = 2.0
+    a = 1.0
     b = 2.0
     c = 2.0
-    beta = 20.0
+    eta = 50.0
     Gamma_0 = 100
     gamma_0 = 25
     J=4 # number of influencers
@@ -112,7 +112,7 @@ function construct()
     M = second_derivative((N_x,N_y), (dx, dy))
     C = centered_difference((N_x,N_y), (dx, dy))
  
-    p = (; grid_points, N_x, N_y, domain,  a, b, c, beta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0)
+    p = (; grid_points, N_x, N_y, domain,  a, b, c, eta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0)
 
     return p
 end
@@ -185,7 +185,7 @@ end
 
 function f(duzy,uzy,p,t)
     yield()
-    (; grid_points, N_x, N_y, domain,  a, b, c, beta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0) = p
+    (; grid_points, N_x, N_y, domain,  a, b, c, eta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0) = p
     u, z, y2 = uzy.x
     du, dz, dy2 = duzy.x
 
@@ -195,7 +195,7 @@ function f(duzy,uzy,p,t)
     m_i = dV*sum(u,dims = (1,2,4))
     m_j = dV*sum(u,dims=(1,2,3))
     Fagent = agent_force(rhosum, K_matrix, W_matrix, dV)
-    rate_matrix = gamma(grid_points, u, y2, beta,dV)
+    rate_matrix = gamma(grid_points, u, y2, eta,dV)
     for i in 1:2
         for j in 1:J
             rho = @view  u[:,:,i,j]
