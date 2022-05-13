@@ -122,20 +122,20 @@ function initialconditions(p)
     rho_0 = zeros(N_x, N_y, 2, 4) 
     mid_y =Int(round(N_y/2))
     mid_x =Int(round(N_x/2))
-    rho_0[1:mid_x, 1:mid_y,:,1] .= 1/(2*J*4)
+    rho_0[1:mid_x, 1:mid_y,:,4] .= 1/(2*J*4)
     rho_0[1:mid_x, mid_y+2:end,:,2] .= 1/(2*J*4)
     rho_0[mid_x+2:end, 1:mid_y,:,3] .= 1/(2*J*4)
-    rho_0[mid_x+2:end, mid_y+2:end,:,4] .= 1/(2*J*4)
+    rho_0[mid_x+2:end, mid_y+2:end,:,1] .= 1/(2*J*4)
     #cat(1/32*ones(N_x,N_y), 1/32*ones(N_x,N_y), dims=3)
     #rho_0 = fill(1/(2*J*4*4), N_x, N_y, 2, J)
     u0 = rho_0
-    z1_0 = [1.,1.]
-    z2_0 = [-1.,-1.]
+    z2_0 = [1.,1.]
+    z1_0 = [-1.,-1.]
     z0 = [z1_0  z2_0]
-    y1_0 = [-1.,-1.]
+    y4_0 = [-1.,-1.]
     y2_0 = [-1.,1.]
     y3_0 = [1.,-1.]
-    y4_0 = [1.,1. ]
+    y1_0 = [1.,1. ]
 
     y0 = [y1_0  y2_0 y3_0 y4_0]
     return ArrayPartition(u0,z0,y0)
@@ -152,8 +152,8 @@ function random_initialconditions(p)
     counts = [0 0 0 0]
     y0 = zeros(2,4)
     for i in 1:128
-        if random_pos[i,1]<0
-            if random_pos[i,2]<0
+        if random_pos[i,2]>0
+            if random_pos[i,1]>0
                 rho_0[:,:,rand([1,2]),1]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
                 counts[1]+=1
                 y0[:,1]+=random_pos[i,:]
@@ -163,7 +163,7 @@ function random_initialconditions(p)
                 y0[:,2]+=random_pos[i,:]
             end
         else
-            if random_pos[i,2]<0
+            if random_pos[i,1]>0
                 rho_0[:,:, rand([1,2]),3]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
                 counts[3]+=1
                 y0[:,3]+=random_pos[i,:]
@@ -176,8 +176,8 @@ function random_initialconditions(p)
     end
     rho_0 = rho_0/(sum(rho_0)*dV)
     u0 = rho_0
-    z1_0 = [1.,1.]
-    z2_0 = [-1.,-1.]
+    z2_0 = [1.,1.]
+    z1_0 = [-1.,-1.]
     z0 = [z1_0  z2_0]
     y0= y0./counts
     return ArrayPartition(u0,z0,y0)
@@ -277,9 +277,9 @@ function plot_ensemble(us, zs, ys, p)
     y_arr = domain[2,1]:dy:domain[2,2]
     
     plot_array = Any[]  
-    z_labels = ["z₁", "z₋₁"]
+    z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄"]
-    dens_labels = [ "ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"; "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄"]
+    dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
     for j in 1:J    
         for i in 1:2
             # make a plot and add it to the plot_array
@@ -320,9 +320,9 @@ function solveplot(tmax=0.1; alg=nothing)
     y_arr = domain[2,1]:dy:domain[2,2]
     
     plot_array = Any[]  
-    z_labels = ["z₁", "z₋₁"]
+    z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄"]
-    dens_labels = [ "ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"; "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄"]
+    dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
     for j in 1:J    
         for i in 1:2
             # make a plot and add it to the plot_array
@@ -348,9 +348,9 @@ function creategif(sol,p, dt=0.01)
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
     cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
-    z_labels = ["z₁", "z₋₁"]
+    z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄"]
-    dens_labels = [ "ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"; "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄"]
+    dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
 
     pdegif = @animate for t = 0:dt:tmax
         plot_array = Any[]  
