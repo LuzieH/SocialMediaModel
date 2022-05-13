@@ -1,8 +1,8 @@
-function [follow,In1,In2,In3,In4] = ChangeInfluencerNetwork2(state,x,n,followers,influencer,dt);
-
-eta = 50;
-theta =0.1;
+function [follow,In1,In2,In3,In4] = ChangeInfluencerNetwork2(state,x,n,followers,influencer,dt, eta);
 %%%Version based on rates
+
+theta =0.1;
+
 follow = followers;
 
 %compute happiness = fraction of followers with same state

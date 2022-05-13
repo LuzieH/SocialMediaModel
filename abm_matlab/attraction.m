@@ -7,7 +7,7 @@ for j=1:n
         ff = [0 0]'; ww=0;
         for m=1:length(J)
             d = norm(x(:,j)-x(:,J(m)));
-            w = exp(-d); %no prefactor 1/2
+            w = exp(-d); 
             ff = ff + w*(x(:,J(m))-x(:,j));
             ww = ww+w;
         end
