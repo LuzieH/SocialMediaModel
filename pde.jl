@@ -1,6 +1,7 @@
 using DifferentialEquations, LinearAlgebra
 using RecursiveArrayTools
 using Plots
+using JLD2
 
 function generate_K(grid_points)
     N, d = size(grid_points)
@@ -92,7 +93,7 @@ function construct()
     a = 1.0
     b = 2.0
     c = 2.0
-    eta = 50.0
+    eta = 25.0
     Gamma_0 = 100
     gamma_0 = 25
     J=4 # number of influencers
@@ -205,7 +206,7 @@ function f(duzy,uzy,p,t)
             yj = @view y2[:,j]
             dyj = @view dy2[:,j]
 
-            force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)            
+            force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)     
             
             div =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
             reac = zeros(N_x, N_y)
@@ -225,10 +226,10 @@ function f(duzy,uzy,p,t)
             drho .=  dif - div + reac
 
             mean_rhoi = 1/m_i[i] * dV*reshape(rhosum_i[:,:,i,:],1,N)*grid_points
-            dzi .= 1/(Gamma_0*m_i[i]) * (mean_rhoi' - zi)
+            dzi .= 1/(Gamma_0) * (mean_rhoi' - zi)
 
             mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
-            dyj .= 1/(gamma_0*m_j[j]) * (mean_rhoj' - yj)
+            dyj .= 1/(gamma_0) * (mean_rhoj' - yj)
         end
     end
 
@@ -260,6 +261,7 @@ function ensemble(tmax=0.1, N=10; alg=nothing, init="random")
         push!(zs, sol(tmax).x[2])
         push!(ys, sol(tmax).x[3])
     end
+    @save "data/ensemble.jld2" us zs ys
     return us, zs, ys
 end
 
