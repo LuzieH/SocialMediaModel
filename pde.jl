@@ -3,6 +3,8 @@ using RecursiveArrayTools
 using Plots
 using JLD2
 
+# TODO: adapt to different numbers of influencers and controlled influencers!
+
 function generate_K(grid_points)
     N, d = size(grid_points)
     @assert d == 2
@@ -96,6 +98,7 @@ function construct()
     eta = 25.0
     Gamma_0 = 100
     gamma_0 = 25
+    n = 128 #number of agents, important for random initial conditions
     J=4 # number of influencers
     dx = 0.05
     dy = dx
@@ -113,7 +116,7 @@ function construct()
     M = second_derivative((N_x,N_y), (dx, dy))
     C = centered_difference((N_x,N_y), (dx, dy))
  
-    p = (; grid_points, N_x, N_y, domain,  a, b, c, eta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0)
+    p = (; grid_points, N_x, N_y, domain,  a, b, c, eta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0,n )
 
     return p
 end
@@ -147,12 +150,12 @@ gaussian(x,center, sigma=0.15) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-ce
 
 function random_initialconditions(p)
     
-    (; grid_points, N_x , N_y,  dV, J) = p
-    random_pos = rand(128,2).*4 .-2 #128 uniform samples in domain
+    (; grid_points, N_x , N_y,  dV, J,n) = p
+    random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
     rho_0 = zeros(N_x, N_y, 2, 4) 
     counts = [0 0 0 0]
     y0 = zeros(2,4)
-    for i in 1:128
+    for i in 1:n
         if random_pos[i,2]>0
             if random_pos[i,1]>0
                 rho_0[:,:,rand([1,2]),1]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
@@ -186,7 +189,7 @@ end
 
 function f(duzy,uzy,p,t)
     yield()
-    (; grid_points, N_x, N_y, domain,  a, b, c, eta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0) = p
+    (; grid_points, N_x, N_y, domain,  a, b, c, eta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0,n) = p
     u, z, y2 = uzy.x
     du, dz, dy2 = duzy.x
 
