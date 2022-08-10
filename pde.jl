@@ -3,8 +3,10 @@ using RecursiveArrayTools
 using Plots
 using JLD2
 
-# TODO: adapt to different numbers of influencers and controlled influencers!
-
+# TODO: adapt to different numbers of influencers and controlled influencers! (that follow a certain given trajectory
+# study number of initial agents in each quadrant of the two types
+# rewrite ensemble function and ensemble PLOTTING
+# gif and plot in one function? is plot a special case of gif?
 function generate_K(grid_points)
     N, d = size(grid_points)
     @assert d == 2
@@ -92,14 +94,14 @@ function construct()
     # Define the constants for the PDE
     sigma = 0.5
     D = sigma^2 * 0.5
-    a = 1.0
+    a = 1.0 #1.0 in paper
     b = 2.0
-    c = 2.0
+    c = 1.0
     eta = 25.0
     Gamma_0 = 100
     gamma_0 = 25
     n = 128 #number of agents, important for random initial conditions
-    J=4 # number of influencers
+    J=4 #number of influencers
     dx = 0.05
     dy = dx
     dV = dx*dy
@@ -146,7 +148,7 @@ function initialconditions(p)
 end
 
 #gaussian that integrates to 1 and centered at center
-gaussian(x,center, sigma=0.15) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
+gaussian(x, center, sigma=0.1) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
 
 function random_initialconditions(p)
     
@@ -238,6 +240,14 @@ function f(duzy,uzy,p,t)
 
 end
 
+
+function sol2uyz(sol, t)
+    u = sol(t).x[1]
+    z = sol(t).x[2]
+    y = sol(t).x[3]
+    return u,z,y
+end
+
 function solve(tmax=0.1; alg=nothing, init="random", p = construct())
     
     if init=="random"
@@ -253,74 +263,72 @@ function solve(tmax=0.1; alg=nothing, init="random", p = construct())
     return sol, p
 end
 
+function solveplot(tmax=0.1; alg=nothing, init="random", p = construct())
+    sol,p = solve(tmax; alg=alg, init=init, p = p)
+
+    u,z,y = sol2uyz(sol, tmax)
+
+    plotarray(u,z,y, p, tmax)
+ 
+    return sol,p
+end
+
+
 function ensemble(tmax=0.1, N=10; alg=nothing, init="random")
-    zs = Any[]
-    ys = Any[]
-    us = Any[]
+
     p = construct()
+    (; N_x, N_y,J) = p
+ 
+    zs = zeros(2, 2, N)
+    ys = zeros(2, J, N)
+    us = zeros(N_x, N_y, 2, J,  N)
+    ## TODO add threading!
     for i=1:N
-        sol,p = solve(tmax; alg=alg, init=init, p=p)
-        push!(us, sol(tmax).x[1])
-        push!(zs, sol(tmax).x[2])
-        push!(ys, sol(tmax).x[3])
+        sol, _ = solve(tmax; alg=alg, init=init, p=p) ##TODO only need to retrn sol not p
+        u,z,y = sol2uyz(sol, tmax)
+        us[:,:,:,:,i] = u
+        zs[:,:,i] = z
+        ys[:,:,i] = y
     end
+
     @save "data/ensemble.jld2" us zs ys
-    return us, zs, ys
+    return us, zs, ys, p
 end
 
 function plot_ensemble(us, zs, ys, p)
-    ys = cat(ys..., dims=3)
-    N=size(ys)[3]
-    zs = cat(zs..., dims=3)
-    us = cat(us...,dims=5)
+    N = size(ys,3)
     av_u = sum(us,dims=5)*(1/N)
+    av_z = sum(zs,dims=3 )*(1/N)
+    av_y = sum(ys,dims=3 )*(1/N)
 
-    (; domain, dx, dy,J) = p
-
-    #PLOTTING
+    plotarray(av_u, av_z, av_y, p, t; save=false)
+    savefig("img/ensemble_average.png")
+    
+    (;X, Y, domain) = p
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
+     
     
-    plot_array = Any[]  
-    z_labels = ["z₋₁","z₁" ]
-    y_labels = ["y₁", "y₂", "y₃", "y₄"]
-    dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
-    for j in 1:J    
-        for i in 1:2
-            # make a plot and add it to the plot_array
-            push!(plot_array, plot_solution2(av_u[:,:,i,j], zs[:,i,:], ys[:,j,:], x_arr, y_arr; title = string(dens_labels[i,j]) ,labely = y_labels[j], labelz = z_labels[i]))
- 
-        end
-    end
-    plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
-    savefig("img/ensemble_average_agents.png")
-    
-    y_all = reshape(ys, (2, N*J))
-    plot(histogram2d(y_all[1,:], y_all[2,:], bins=(-2:0.1:2, -2:0.1:2)), title="Final distribution of influencers") |> display
-    savefig("img/influencer_dist.png")
-end
 
+    yall = reshape(ys, (2, N*J))
+    evalkde = [sumgaussian([X[i,j], Y[i,j]], yall) for i in 1:size(X,1), j in 1:size(X,2)]
+    plot(heatmap(x_arr, y_arr, evalkde', c=:berlin, title="Final distribution of influencers")) |> display
+    savefig("img/ensemble_influencer.png")
+end
 
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf))
-    subp = heatmap(x_arr,y_arr, rho', title = title, c=:berlin, clims=clim)
-    scatter!(subp, [z[1]], [z[2]], markercolor=[:yellow],markersize=6, lab=labelz)
-    scatter!(subp, [y[1]], [y[2]], markercolor=[:red],markersize=6, lab=labely)
-    return subp
-end
-
-function plot_solution2(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf))
     subp = heatmap(x_arr,y_arr, rho', title = title, c=:berlin, clims=clim)
     scatter!(subp, z[1,:], z[2,:], markercolor=[:yellow],markersize=6, lab=labelz)
     scatter!(subp, y[1,:], y[2,:], markercolor=[:red],markersize=6, lab=labely)
     return subp
 end
 
-function solveplot(tmax=0.1; alg=nothing)
-    sol, p = solve(tmax; alg=nothing)
 
-
+function plotarray(u,z,y, p, t; save=true)
     (; domain, dx, dy,J) = p
-    #PLOTTING
+
+    #u,z,y = sol2uyz(sol, t)
+
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
     
@@ -331,44 +339,57 @@ function solveplot(tmax=0.1; alg=nothing)
     for j in 1:J    
         for i in 1:2
             # make a plot and add it to the plot_array
-            push!(plot_array, plot_solution(sol(tmax).x[1][:,:,i,j], sol(tmax).x[2][:,i], sol(tmax).x[3][:,j], x_arr, y_arr; title = string(dens_labels[i,j],"(", string(tmax), ")") ,labely = y_labels[j], labelz = z_labels[i]))
+            title = string(dens_labels[i,j],"(", string(t), ")") 
+            push!(plot_array, plot_solution(u[:,:,i,j], z[:,i], y[:,j], x_arr, y_arr; title = title,labely = y_labels[j], labelz = z_labels[i]))
         end
     end
     plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
 
-    #p2 = plot_solution(sol(tmax).x[1][:,:,2], sol(tmax).x[2][:,2], x_arr, y_arr; title=string("ρ₋₁(",string(tmax),")"), label="z₋₁")
-    #plot(p1, p2, layout=[4 4], size=(1000,4*400)) 
-    savefig("img/finaltime_pde.png")
-    return sol, p
+    if save==true
+        savefig("img/pdearray.png")
+    end
 end
  
-function creategif(sol,p, dt=0.01)
-    #rho1(t)=sol(t).x[1][:,:,1]
-    #'rho2(t)=sol(t).x[1][:,:,2]
-    #z1(t)=sol(t).x[2][:,1]
-    #z2(t)=sol(t).x[2][:,2]
-    
-    tmax=sol.t[end]
-    (; domain, dx, dy, J) = p
-    x_arr = domain[1,1]:dx:domain[1,2]
-    y_arr = domain[2,1]:dy:domain[2,2]
-    cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
-    z_labels = ["z₋₁","z₁" ]
-    y_labels = ["y₁", "y₂", "y₃", "y₄"]
-    dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
+function gifarray(sol, p, dt=0.01)
 
+    tmax=sol.t[end]
+    #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
+ 
     pdegif = @animate for t = 0:dt:tmax
-        plot_array = Any[]  
-        for j in 1:J    
-            for i in 1:2
-                # make a plot and add it to the plot_array
-                push!(plot_array, plot_solution(sol(t).x[1][:,:,i,j], sol(t).x[2][:,i], sol(t).x[3][:,j], x_arr, y_arr; title = string(dens_labels[i,j],"(", string(t), ")") ,labely = y_labels[j], labelz = z_labels[i], clim = cl))
-            end
-        end
-        plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
+        u,z,y = sol2uyz(sol, t)
+        plotarray(u,z,y, p, t; save=false)
     end
     Plots.gif(pdegif, "img/evolution.gif", fps = 30)
 end
+
+function plotsingle(su,z,y,p,t; save=true)
+    (; domain, dx, dy, J) = p
+    #u,z,y = sol2uyz(sol, t)
+
+    x_arr = domain[1,1]:dx:domain[1,2]
+    y_arr = domain[2,1]:dy:domain[2,2] 
+
+    dens = dropdims(sum(u, dims=(3,4)), dims=(3,4))
+    subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(t)), c=:berlin) 
+    scatter!(subp, z[1,:], z[2,:], markercolor=[:yellow],markersize=4)
+    scatter!(subp, y[1,:], y[2,:], markercolor=[:red],markersize=4)|> display
+
+    if save==true
+        savefig("img/pdesingle.png")
+    end
+end
+
+function gifsingle(sol,p, dt=0.01)
+    tmax=sol.t[end]
+    #    cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
+
+    pdegif = @animate for t = 0:dt:tmax
+        u,z,y = sol2uyz(sol, t)
+        plotsingle(sol,p,t,save=false)
+    end
+    Plots.gif(pdegif, "img/evolutionsingle.gif", fps = 30)
+end
+
 
 function test_f()
     p = construct()

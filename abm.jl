@@ -1,10 +1,13 @@
 using LinearAlgebra
 using StatsBase
+using KernelDensity
 using Plots
 using JLD2
 
 #need to rename all functions to be unique from PDE???
 # TODO: adapt to different numbers of influencers and controlled influencers!
+# maybe change function g? 
+# plot: point cloud of agents and Kernel density estimation
 
 # Prepare grid for distribution over many simulations
 #hGrid = 0.2
@@ -18,7 +21,7 @@ using JLD2
 #histInf = zeros(maxNr, maxNr)
 #histMed = zeros(maxNr, maxNr)
 
-function construct()
+function ABMconstruct()
    
     # setting model and simulation parameters
     dt=0.01  # simulation stepsize
@@ -28,19 +31,25 @@ function construct()
     sigma=0.5 # noise on individual agents 
     sigmahat=0 # noise on influencers
     sigmatilde=0 # noise on media
-    a=1 # interaction strength between agents 
-    b=2; # interaction strength between agents and influencers
-    c=2 # interaction strength between agents and media
+    a=1. #a=1 in paper, interaction strength between agents 
+    b=2. # interaction strength between agents and influencers
+    c=1. # interaction strength between agents and media
     frictionI = 25 # friction for influencers
     friction = 100  #friction for media
     eta = 50  #rate constant for changing influencer 
- 
-    p = (; dt, n, n_media, n_inf, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta)
+    dx = 0.05
+    dy = dx
+    domain = [-2 2; -2 2]
+    X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
+    Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
+    #grid_points = [vec(X) vec(Y)] 
+
+    p = (; dt, n, n_media, n_inf, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta, dx, dy, domain, X, Y)
 
     return p
 end
 
-function random_initialconditions(p)
+function ABMrandominitialconditions(p)
     (; n, n_media, n_inf) = p
 
     # agent opinions
@@ -175,9 +184,9 @@ function changeinfluencer(state,x,fol,inf,p)
     return fol
 end
 
-function ABMsolve(NT = 100;  p = construct())
+function ABMsolve(NT = 100;  p = ABMconstruct())
     
-    x, media, x_I1, x_I2, x_I3, x_I4, inf, fol, state, x_M1, x_M2, Net  = random_initialconditions(p)
+    x, media, x_I1, x_I2, x_I3, x_I4, inf, fol, state, x_M1, x_M2, Net  = ABMrandominitialconditions(p)
     dt, n, n_media, n_inf, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta= p
 
     xs = [x] #initial condition
@@ -228,16 +237,36 @@ function ABMsolve(NT = 100;  p = construct())
 
 end
 
-function plothist(x, choice)
-    dx = 0.2 #0.05
+function plothist(x)
+    dx = 0.25 #0.05
     edges = (-2:dx:2, -2:dx:2)
-    data = (x[choice,1], x[choice,2])
+    data = (x[:,1], x[:,2])
     h = fit(Histogram, data, edges)
     subp = histogram2d(data, bins=edges) #heatmap(h.weights)
     return subp
 end
 
-function plotall(x, xinf, state,  n_inf)
+function sumgaussian(x, centers)
+    output = 0
+    for i in 1:size(centers,1)
+        output = output +  gaussian(x, centers[i,:]) 
+    end
+    return output
+end 
+
+function kdeplot(centers, p)
+    (;X, Y, domain) = p
+
+    x_arr = domain[1,1]:dx:domain[1,2]
+    y_arr = domain[2,1]:dy:domain[2,2]
+    evalkde = [sumgaussian([X[i,j], Y[i,j]], centers) for i in 1:size(X,1), j in 1:size(X,2)]
+    #K = kde(x, boundary = ((-2,2),(-2,2)))
+    subp = heatmap(x_arr, y_arr, evalkde', c=:berlin)
+    scatter!(subp, centers[:,1], centers[:,2], markercolor=[:yellow],markersize=4)
+    return subp
+end
+
+function plotall(x, xinf, state,  n_inf, p)
     plot_array = Any[]  
     z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄"]
@@ -250,7 +279,8 @@ function plotall(x, xinf, state,  n_inf)
             choice = intersect(xi, xm)
 
             # make a plot and add it to the plot_array
-            push!(plot_array, plothist(x, choice))
+            push!(plot_array, kdeplot(x[choice,:], p))
+            #push!(plot_array, plothist(x[choice,:]))
         end
     end
     plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
