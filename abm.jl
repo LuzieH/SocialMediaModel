@@ -27,7 +27,7 @@ function ABMconstruct()
     dt=0.01  # simulation stepsize
     n = 128 # number of agents
     n_media = 2
-    n_inf = 4
+    J = 4
     sigma=0.5 # noise on individual agents 
     sigmahat=0 # noise on influencers
     sigmatilde=0 # noise on media
@@ -36,7 +36,7 @@ function ABMconstruct()
     c=1. # interaction strength between agents and media
     frictionI = 25 # friction for influencers
     friction = 100  #friction for media
-    eta = 50  #rate constant for changing influencer 
+    eta = 15  #rate constant for changing influencer 
     dx = 0.05
     dy = dx
     domain = [-2 2; -2 2]
@@ -44,63 +44,69 @@ function ABMconstruct()
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     #grid_points = [vec(X) vec(Y)] 
 
-    p = (; dt, n, n_media, n_inf, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta, dx, dy, domain, X, Y)
+    p = (; dt, n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta, dx, dy, domain, X, Y)
 
     return p
 end
 
 function ABMrandominitialconditions(p)
-    (; n, n_media, n_inf) = p
+    (; n, n_media, J) = p
 
     # agent opinions
     x = rand(n,2).*4 .-2 
     # media opinions
     media =[-1. 1.; -1. 1.]
     # agents following different influencers
-    x_I1 = intersect(findall(x-> x>0,x[:,1]), findall(x-> x>0,x[:,2])) 
-    x_I2 = intersect(findall(x-> x<=0,x[:,1]), findall(x-> x>0,x[:,2]))
-    x_I3 = intersect(findall(x-> x>0,x[:,1]), findall(x-> x<=0,x[:,2]))  
-    x_I4 = intersect(findall(x-> x<=0,x[:,1]), findall(x-> x<=0,x[:,2]))  
+    xI = Any[]
+    push!(xI,  intersect(findall(x-> x>0,x[:,1]), findall(x-> x>0,x[:,2])))
+    push!(xI,  intersect(findall(x-> x<=0,x[:,1]), findall(x-> x>0,x[:,2])))
+    push!(xI,  intersect(findall(x-> x>0,x[:,1]), findall(x-> x<=0,x[:,2])) )
+    push!(xI,  intersect(findall(x-> x<=0,x[:,1]), findall(x-> x<=0,x[:,2]))) 
 
     #follower network
-    fol=zeros(n, n_inf)
-    fol[x_I1,1] .=1
-    fol[x_I2,2] .=1
-    fol[x_I3,3] .=1
-    fol[x_I4,4] .=1
+    fol=zeros(n, J)
+    for i in 1:J
+        fol[xI[i],i] .=1
+    end
 
     #initial opinions of influencers
-    inf = zeros(n_inf,2)
-    inf[1,:] = sum(x[x_I1,:],dims=1)/size(x_I1,1)
-    inf[2,:]= sum(x[x_I2,:],dims=1)/size(x_I2,1)
-    inf[3,:] = sum(x[x_I3,:],dims=1)/size(x_I3,1)
-    inf[4,:]= sum(x[x_I4,:],dims=1)/size(x_I4,1)
-
+    inf = zeros(J,2)
+    for i in 1:J
+        inf[i,:] = sum(x[xI[i],:],dims=1)/size(xI[i],1)
+    end
 
     # initialization of political attitude state of all agents
     state = (rand(n).>0.5)*2 .-1
-    x_M1 = findall(x->x==-1, state)
-    x_M2 = findall(x->x==1, state)
+    xM = Any[]
+    push!(xM, findall(x->x==-1, state))
+    push!(xM, findall(x->x==1, state))
 
     #initialization of interaction network between agents 
     Net = ones(n,n)  # everyone connected to everyone including self-connections
 
-    return x, media, x_I1, x_I2, x_I3, x_I4, inf, fol, state, x_M1, x_M2, Net 
+    # initial number of influencers of different attituted that follow the different influencers
+    counts = zeros(J,2)
+    for j in 1:J
+        for i in 1:2
+            counts[j,i] = size(intersect(xI[j], xM[i]),1)
+        end
+    end
 
+    return x, media, inf, fol, state, Net, counts 
 end
 
 function attraction(x, Net)
     n = size(Net, 1)
     force = zeros(n,2)
     for j in 1:n
-        J=findall(x->x==1, Net[j,:]) # TODO: maybe simplify for complete network
-        if isempty(J)
+        L=findall(x->x==1, Net[j,:]) # TODO: maybe simplify for complete network
+        if isempty(L)
             force[j,:]=[0 0]
         else
             fi = [0 0]
             wsum=0
-            for i in 1:size(J,1)
-                d = x[J[i],:]-x[j,:]
+            for i in 1:size(L,1)
+                d = x[L[i],:]-x[j,:]
                 w = exp(-(d[1]^2 +d[2]^2))
                 fi = fi + w*d'
                 wsum = wsum+w
@@ -113,7 +119,7 @@ function attraction(x, Net)
 end
 
 function influence(x,media,inf,fol,state,p)
-    (; n, b, c, n_inf) = p
+    (; n, b, c, J) = p
     force1 =zeros(size(x))
     force2 =zeros(size(x))
     for j in 1:n
@@ -123,7 +129,7 @@ function influence(x,media,inf,fol,state,p)
             force1[j,:] = media[:,1]-x[j,:]
         end
 
-        for k in 1:n_inf
+        for k in 1:J
             if fol[j,k]==1
                 force2[j,:]=inf[k,:] -x[j,:]
             end
@@ -134,19 +140,19 @@ function influence(x,media,inf,fol,state,p)
 end
 
 function changeinfluencer(state,x,fol,inf,p)
-    (; dt, eta, n, n_inf) = p
+    (; dt, eta, n, J) = p
     
     theta =0.1 #threshold for discrete g-function
     
     # compute happiness = fraction of followers with same state
-    fraction = zeros(n_inf)
-    for i=1:n_inf
+    fraction = zeros(J)
+    for i=1:J
         fraction[i]= sum(fol[:,i].*state)/sum(fol[:,i])
     end
     
     #ompute distance of followers to influencers
-    dist = zeros(n, n_inf)
-    for i=1:n_inf
+    dist = zeros(n, J)
+    for i=1:J
         for j=1:n
             d = x[j,:]-inf[i,:]
             dist[j,i]= exp(-(d[1]^2+d[2]^2))
@@ -154,9 +160,9 @@ function changeinfluencer(state,x,fol,inf,p)
     end
     
     # compute attractiveness of influencer for followers
-    attractive = zeros(n, n_inf)
+    attractive = zeros(n, J)
     for j=1:n
-        for i=1:n_inf
+        for i=1:J
             g = state[j]*fraction[i]
             if g<0 
                 g=theta
@@ -176,7 +182,7 @@ function changeinfluencer(state,x,fol,inf,p)
             while sum(p[1:k])<r2
                 k=k+1
             end
-            fol[j,:]=zeros(n_inf)      
+            fol[j,:]=zeros(J)      
             fol[j,k]=1
         end
     end
@@ -186,13 +192,13 @@ end
 
 function ABMsolve(NT = 100;  p = ABMconstruct())
     
-    x, media, x_I1, x_I2, x_I3, x_I4, inf, fol, state, x_M1, x_M2, Net  = ABMrandominitialconditions(p)
-    dt, n, n_media, n_inf, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta= p
+    x, media, inf, fol, state,Net,counts  = ABMrandominitialconditions(p)
+    dt, n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta= p
 
     xs = [x] #initial condition
     infs = [inf]
     meds = [media]
-    xinfs = [fol * collect(1:n_inf)]
+    xinfs = [fol * collect(1:J)]
 
     for k in 2:NT
         xold = x
@@ -204,8 +210,8 @@ function ABMsolve(NT = 100;  p = ABMconstruct())
 
         # influencer opinions adapt slowly to opinions of followers with friction
         # depending on number of followers
-        masscenter=zeros(n_inf,2)
-        for i in 1:n_inf
+        masscenter=zeros(J,2)
+        for i in 1:J
             if sum(fol[:,i])>0 
                 masscenter[i,:] =sum(fol[:,i] .* x, dims = 1) /sum(fol[:,i])
                 inf[i,:] =  inf[i,:]  + dt/frictionI * (masscenter[i,:]-inf[i,:]) + 1/frictionI*sqrt(dt*sigmahat)*randn(2,1)
@@ -222,18 +228,17 @@ function ABMsolve(NT = 100;  p = ABMconstruct())
             media[i,:] = media[i,:]  + dt/friction * (masscenter[i,:] -media[i,:]) + 1/friction * sqrt(dt*sigmatilde)*randn(2,1)
         end
         
-
         # individual may jump from one influencer to another
         # jumps according to rate model
         fol = changeinfluencer(state,xold,fol,inf,p)
-        print(media)
+
         xs = push!(xs,copy(x))
         infs = push!(infs, copy(inf))
         meds = push!(meds, copy(media))
-        xinfs = push!(xinfs, copy(fol * collect(1:n_inf)))
+        xinfs = push!(xinfs, copy(fol * collect(1:J)))
     end
 
-    return xs, xinfs, infs, meds, state, p
+    return xs, xinfs, infs, meds, state, p, counts
 
 end
 
@@ -262,17 +267,23 @@ function kdeplot(centers, p)
     evalkde = [sumgaussian([X[i,j], Y[i,j]], centers) for i in 1:size(X,1), j in 1:size(X,2)]
     #K = kde(x, boundary = ((-2,2),(-2,2)))
     subp = heatmap(x_arr, y_arr, evalkde', c=:berlin)
-    scatter!(subp, centers[:,1], centers[:,2], markercolor=[:yellow],markersize=4)
+    scatter!(subp, centers[:,1], centers[:,2], markercolor=:yellow,markersize=4)
     return subp
 end
 
-function plotall(x, xinf, state,  n_inf, p)
+function ABMsolveplot(NT = 100;  p = ABMconstruct())
+    xs, xinfs, infs, meds, state, p, counts = ABMsolve(NT;  p=p)
+    ABMplotarray(xs[end], xinfs[end], state, p)
+end
+
+function ABMplotarray(x, xinf, state,  p; save = true)
+    (; J) = p
     plot_array = Any[]  
     z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄"]
     dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
     states = [-1 1]
-    for j in 1:n_inf    
+    for j in 1:J    
         for i in 1:2
             xi  = findall(x-> x==j, xinf)
             xm = findall(x-> x==states[i], state)
@@ -285,7 +296,17 @@ function plotall(x, xinf, state,  n_inf, p)
     end
     plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
 
-    #p2 = plot_solution(sol(tmax).x[1][:,:,2], sol(tmax).x[2][:,2], x_arr, y_arr; title=string("ρ₋₁(",string(tmax),")"), label="z₋₁")
-    #plot(p1, p2, layout=[4 4], size=(1000,4*400)) 
-    savefig("img/finaltime_abm.png")
+    if save==true
+        savefig("img/abmarray.png")
+    end
+end
+
+function ABMgifarray(xs, xinfs, state, p; dN=10)
+    NT=size(xs,1)
+    #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
+ 
+    abmgif = @animate for t = 1:dN:NT
+        ABMplotarray(xs[t], xinfs[t], state,  p; save = false)
+    end
+    Plots.gif(abmgif, "img/ABMevolution.gif", fps = 30)
 end

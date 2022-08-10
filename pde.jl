@@ -97,7 +97,7 @@ function construct()
     a = 1.0 #1.0 in paper
     b = 2.0
     c = 1.0
-    eta = 25.0
+    eta = 15.0
     Gamma_0 = 100
     gamma_0 = 25
     n = 128 #number of agents, important for random initial conditions
@@ -118,13 +118,13 @@ function construct()
     M = second_derivative((N_x,N_y), (dx, dy))
     C = centered_difference((N_x,N_y), (dx, dy))
  
-    p = (; grid_points, N_x, N_y, domain,  a, b, c, eta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0,n )
+    p = (; grid_points,X, Y, N_x, N_y, domain,  a, b, c, eta, K_matrix, W_matrix, dx,dy, dV, C,  D, M , N, J, Gamma_0, gamma_0,n )
 
     return p
 end
 
 function initialconditions(p)
-    (; N_x , N_y,  J) = p
+    (; N_x , N_y,  J, n) = p
     rho_0 = zeros(N_x, N_y, 2, 4) 
     mid_y =Int(round(N_y/2))
     mid_x =Int(round(N_x/2))
@@ -144,7 +144,8 @@ function initialconditions(p)
     y1_0 = [1.,1. ]
 
     y0 = [y1_0  y2_0 y3_0 y4_0]
-    return ArrayPartition(u0,z0,y0)
+    counts = n/(2*J)*ones(J,2) # proportion of agents that follow each influencer
+    return ArrayPartition(u0,z0,y0), counts
 end
 
 #gaussian that integrates to 1 and centered at center
@@ -155,27 +156,31 @@ function random_initialconditions(p)
     (; grid_points, N_x , N_y,  dV, J,n) = p
     random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
     rho_0 = zeros(N_x, N_y, 2, 4) 
-    counts = [0 0 0 0]
+    counts = zeros(J,2)
     y0 = zeros(2,4)
     for i in 1:n
         if random_pos[i,2]>0
             if random_pos[i,1]>0
-                rho_0[:,:,rand([1,2]),1]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
-                counts[1]+=1
+                state = rand([1,2])
+                rho_0[:,:,state,1]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
+                counts[1, state]+=1
                 y0[:,1]+=random_pos[i,:]
             else
-                rho_0[:,:,rand([1,2]),2]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
-                counts[2]+=1
+                state = rand([1,2])
+                rho_0[:,:,state,2]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
+                counts[2, state]+=1
                 y0[:,2]+=random_pos[i,:]
             end
         else
             if random_pos[i,1]>0
-                rho_0[:,:, rand([1,2]),3]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
-                counts[3]+=1
+                state = rand([1,2])
+                rho_0[:,:, state,3]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
+                counts[3, state]+=1
                 y0[:,3]+=random_pos[i,:]
             else
-                rho_0[:,:, rand([1,2]), 4]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
-                counts[4]+=1
+                state = rand([1,2])
+                rho_0[:,:, state, 4]+= reshape([gaussian(grid_points[j,:], random_pos[i,:]) for j in 1:N_x*N_y], N_x, N_y)
+                counts[4, state]+=1
                 y0[:,4]+=random_pos[i,:]
             end
         end
@@ -185,8 +190,8 @@ function random_initialconditions(p)
     z2_0 = [1.,1.]
     z1_0 = [-1.,-1.]
     z0 = [z1_0  z2_0]
-    y0= y0./counts
-    return ArrayPartition(u0,z0,y0)
+    y0= y0./dropdims(sum(counts, dims=2), dims=2)'
+    return ArrayPartition(u0,z0,y0), counts
 end
 
 function f(duzy,uzy,p,t)
@@ -251,30 +256,30 @@ end
 function solve(tmax=0.1; alg=nothing, init="random", p = construct())
     
     if init=="random"
-        uzy0 = random_initialconditions(p)
+        uzy0, counts = random_initialconditions(p)
     else
-        uzy0 = initialconditions(p)
+        uzy0, counts = initialconditions(p)
     end
     
     # Solve the ODE
     prob = ODEProblem(f,uzy0,(0.0,tmax),p)
     @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=true)
     
-    return sol, p
+    return sol, p, counts
 end
 
 function solveplot(tmax=0.1; alg=nothing, init="random", p = construct())
-    sol,p = solve(tmax; alg=alg, init=init, p = p)
+    sol,p, counts = solve(tmax; alg=alg, init=init, p = p)
 
     u,z,y = sol2uyz(sol, tmax)
 
     plotarray(u,z,y, p, tmax)
  
-    return sol,p
+    return sol,p, counts
 end
 
 
-function ensemble(tmax=0.1, N=10; alg=nothing, init="random")
+function solveensemble(tmax=0.1, N=10; alg=nothing, init="random")
 
     p = construct()
     (; N_x, N_y,J) = p
@@ -283,43 +288,50 @@ function ensemble(tmax=0.1, N=10; alg=nothing, init="random")
     ys = zeros(2, J, N)
     us = zeros(N_x, N_y, 2, J,  N)
     ## TODO add threading!
+    av_counts = zeros(J,2)
     for i=1:N
-        sol, _ = solve(tmax; alg=alg, init=init, p=p) ##TODO only need to retrn sol not p
+        sol, _ , counts= solve(tmax; alg=alg, init=init, p=p) ##TODO only need to retrn sol not p
         u,z,y = sol2uyz(sol, tmax)
+        av_counts = av_counts +  counts*(1/N)
         us[:,:,:,:,i] = u
         zs[:,:,i] = z
         ys[:,:,i] = y
     end
 
     @save "data/ensemble.jld2" us zs ys
-    return us, zs, ys, p
+    return us, zs, ys, p, av_counts 
 end
 
-function plot_ensemble(us, zs, ys, p)
+function plotensemble(us, zs, ys, p, tmax)
     N = size(ys,3)
     av_u = sum(us,dims=5)*(1/N)
     av_z = sum(zs,dims=3 )*(1/N)
     av_y = sum(ys,dims=3 )*(1/N)
 
-    plotarray(av_u, av_z, av_y, p, t; save=false)
-    savefig("img/ensemble_average.png")
+    plotarray(av_u, av_z, av_y, p, tmax; save=false)
+    savefig("img/ensemble.png")
     
     (;X, Y, domain) = p
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
-     
     
 
-    yall = reshape(ys, (2, N*J))
+    yall = reshape(ys, (N*J,2))
     evalkde = [sumgaussian([X[i,j], Y[i,j]], yall) for i in 1:size(X,1), j in 1:size(X,2)]
-    plot(heatmap(x_arr, y_arr, evalkde', c=:berlin, title="Final distribution of influencers")) |> display
+    heatmap(x_arr, y_arr, evalkde', c=:berlin, title="Final distribution of influencers") |> display
     savefig("img/ensemble_influencer.png")
+end
+
+function psensemble(tmax=0.1, N=10; alg=nothing, init="random")
+    us, zs, ys, p, av_counts  = solveensemble(tmax, N; alg=alg, init=init)
+    plotensemble(us, zs, ys, p, tmax)
+    return us, zs, ys, p, av_counts 
 end
 
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf))
     subp = heatmap(x_arr,y_arr, rho', title = title, c=:berlin, clims=clim)
-    scatter!(subp, z[1,:], z[2,:], markercolor=[:yellow],markersize=6, lab=labelz)
-    scatter!(subp, y[1,:], y[2,:], markercolor=[:red],markersize=6, lab=labely)
+    scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=6, lab=labelz)
+    scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=6, lab=labely)
     return subp
 end
 
@@ -332,18 +344,19 @@ function plotarray(u,z,y, p, t; save=true)
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
     
-    plot_array = Any[]  
+    array = Any[]  
     z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄"]
     dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
     for j in 1:J    
         for i in 1:2
-            # make a plot and add it to the plot_array
+            # make a plot and add it to the array
+            cl = (0, maximum(u)) #limits colorbar
             title = string(dens_labels[i,j],"(", string(t), ")") 
-            push!(plot_array, plot_solution(u[:,:,i,j], z[:,i], y[:,j], x_arr, y_arr; title = title,labely = y_labels[j], labelz = z_labels[i]))
+            push!(array, plot_solution(u[:,:,i,j], z[:,i], y[:,j], x_arr, y_arr; title = title,labely = y_labels[j], labelz = z_labels[i], clim=cl))
         end
     end
-    plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
+    plot(array..., layout=(4,2),size=(1000,1000)) |> display
 
     if save==true
         savefig("img/pdearray.png")
@@ -362,7 +375,7 @@ function gifarray(sol, p, dt=0.01)
     Plots.gif(pdegif, "img/evolution.gif", fps = 30)
 end
 
-function plotsingle(su,z,y,p,t; save=true)
+function plotsingle(u,z,y,p,t; save=true)
     (; domain, dx, dy, J) = p
     #u,z,y = sol2uyz(sol, t)
 
@@ -371,8 +384,8 @@ function plotsingle(su,z,y,p,t; save=true)
 
     dens = dropdims(sum(u, dims=(3,4)), dims=(3,4))
     subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(t)), c=:berlin) 
-    scatter!(subp, z[1,:], z[2,:], markercolor=[:yellow],markersize=4)
-    scatter!(subp, y[1,:], y[2,:], markercolor=[:red],markersize=4)|> display
+    scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=4)
+    scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=4)|> display
 
     if save==true
         savefig("img/pdesingle.png")
@@ -385,7 +398,7 @@ function gifsingle(sol,p, dt=0.01)
 
     pdegif = @animate for t = 0:dt:tmax
         u,z,y = sol2uyz(sol, t)
-        plotsingle(sol,p,t,save=false)
+        plotsingle(u,z,y,p,t,save=false)
     end
     Plots.gif(pdegif, "img/evolutionsingle.gif", fps = 30)
 end
