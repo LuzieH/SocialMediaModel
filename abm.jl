@@ -55,7 +55,7 @@ function ABMrandominitialconditions(p)
     # agent opinions
     x = rand(n,2).*4 .-2 
     # media opinions
-    media =[-1. 1.; -1. 1.]
+    media =[-1. -1.; 1. 1.]
     # agents following different influencers
     xI = Any[]
     push!(xI,  intersect(findall(x-> x>0,x[:,1]), findall(x-> x>0,x[:,2])))
@@ -241,7 +241,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct())
     return xs, xinfs, infs, meds, state, p, counts
 
 end
-
+#= 
 function plothist(x)
     dx = 0.25 #0.05
     edges = (-2:dx:2, -2:dx:2)
@@ -250,7 +250,7 @@ function plothist(x)
     subp = histogram2d(data, bins=edges) #heatmap(h.weights)
     return subp
 end
-
+ =#
 function sumgaussian(x, centers)
     output = 0
     for i in 1:size(centers,1)
@@ -259,29 +259,33 @@ function sumgaussian(x, centers)
     return output
 end 
 
-function kdeplot(centers, p)
-    (;X, Y, domain) = p
+function kdeplot(centers, inf, media,  p; title = "",labely ="", labelz ="")
+    (;X, Y, domain, dx, dy, n) = p
 
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
-    evalkde = [sumgaussian([X[i,j], Y[i,j]], centers) for i in 1:size(X,1), j in 1:size(X,2)]
+    evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers) for i in 1:size(X,1), j in 1:size(X,2)]
     #K = kde(x, boundary = ((-2,2),(-2,2)))
-    subp = heatmap(x_arr, y_arr, evalkde', c=:berlin)
-    scatter!(subp, centers[:,1], centers[:,2], markercolor=:yellow,markersize=4)
+    subp = heatmap(x_arr, y_arr, evalkde', c=:berlin, title = title)
+    scatter!(subp, centers[:,1], centers[:,2], markercolor=:white,markersize=3)
+    scatter!(subp, inf[1,:], inf[2,:], markercolor=:red,markersize=5, lab=labely)
+    scatter!(subp, media[1,:], media[2,:], markercolor=:yellow,markersize=5, lab=labelz)
     return subp
 end
 
 function ABMsolveplot(NT = 100;  p = ABMconstruct())
-    xs, xinfs, infs, meds, state, p, counts = ABMsolve(NT;  p=p)
-    ABMplotarray(xs[end], xinfs[end], state, p)
+    (;dt) = p
+    @time xs, xinfs, infs, meds, state, p, counts = ABMsolve(NT;  p=p)
+    ABMplotarray(xs[end], xinfs[end],state,  infs[end], meds[end],  p, dt*NT)
+    return xs, xinfs, infs, meds, state, p, counts
 end
 
-function ABMplotarray(x, xinf, state,  p; save = true)
+function ABMplotarray(x, xinf, state, inf, media,  p, t; save = true)
     (; J) = p
     plot_array = Any[]  
     z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄"]
-    dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
+    dens_labels = ["ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄"]
     states = [-1 1]
     for j in 1:J    
         for i in 1:2
@@ -289,9 +293,10 @@ function ABMplotarray(x, xinf, state,  p; save = true)
             xm = findall(x-> x==states[i], state)
             choice = intersect(xi, xm)
 
+
+            title = string(dens_labels[i,j],"(", string(t), ")")    
             # make a plot and add it to the plot_array
-            push!(plot_array, kdeplot(x[choice,:], p))
-            #push!(plot_array, plothist(x[choice,:]))
+            push!(plot_array, kdeplot(x[choice,:], inf[j,:], media[i,:], p; title = title,labely = y_labels[j], labelz = z_labels[i]))
         end
     end
     plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
@@ -301,12 +306,35 @@ function ABMplotarray(x, xinf, state,  p; save = true)
     end
 end
 
-function ABMgifarray(xs, xinfs, state, p; dN=10)
+function ABMplotsingle(x, xinf, state, inf, media,  p, t; save = true)
+    (; J) = p
+    subp= kdeplot(x, inf', media', p)
+
+    plot(subp) |> display
+
+    if save==true
+        savefig("img/abmsingle.png")
+    end
+end
+
+function ABMgifarray(xs, xinfs, state, infs, meds, p; dN=10)
     NT=size(xs,1)
+    (;dt) = p
     #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
  
     abmgif = @animate for t = 1:dN:NT
-        ABMplotarray(xs[t], xinfs[t], state,  p; save = false)
+        ABMplotarray(xs[t], xinfs[t], state, infs[t], meds[t],  p, t*dt; save = false)
     end
     Plots.gif(abmgif, "img/ABMevolution.gif", fps = 30)
+end
+
+function ABMgifsingle(xs, xinfs, state, infs, meds, p; dN=10)
+    NT=size(xs,1)
+    (;dt) = p
+    #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
+ 
+    abmgif = @animate for t = 1:dN:NT
+        ABMplotsingle(xs[t], xinfs[t], state, infs[t], meds[t],  p, t*dt; save = false)
+    end
+    Plots.gif(abmgif, "img/ABMevolutionsingle.gif", fps = 30)
 end

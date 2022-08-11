@@ -149,7 +149,7 @@ function initialconditions(p)
 end
 
 #gaussian that integrates to 1 and centered at center
-gaussian(x, center, sigma=0.1) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
+gaussian(x, center, sigma=0.15) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
 
 function random_initialconditions(p)
     
@@ -289,8 +289,8 @@ function solveensemble(tmax=0.1, N=10; alg=nothing, init="random")
     us = zeros(N_x, N_y, 2, J,  N)
     ## TODO add threading!
     av_counts = zeros(J,2)
-    for i=1:N
-        sol, _ , counts= solve(tmax; alg=alg, init=init, p=p) ##TODO only need to retrn sol not p
+    Threads.@threads for i=1:N
+        sol, _ , counts= solve(tmax; alg=alg, init=init, p=p)
         u,z,y = sol2uyz(sol, tmax)
         av_counts = av_counts +  counts*(1/N)
         us[:,:,:,:,i] = u
