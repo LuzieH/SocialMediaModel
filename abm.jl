@@ -9,48 +9,21 @@ using JLD2
 # maybe change function g? 
 # plot: point cloud of agents and Kernel density estimation
 
-# Prepare grid for distribution over many simulations
-#hGrid = 0.2
-#maxNr = fix(4/hGrid)
-#gridx=-2:hGrid:2
-#gridy=-2:hGrid:2
-#gridcentersx = -2+hGrid/2:hGrid:2-hGrid/2
-#gridcentersy = -2+hGrid/2:hGrid:2-hGrid/2
-#histograms for Individuals, Influencer and Media
-#histInd = zeros(2,4,maxNr, maxNr) 
-#histInf = zeros(maxNr, maxNr)
-#histMed = zeros(maxNr, maxNr)
-
 function ABMconstruct()
-   
-    # setting model and simulation parameters
-    dt=0.01  # simulation stepsize
-    n = 128 # number of agents
-    n_media = 2
-    J = 4
-    sigma=0.5 # noise on individual agents 
-    sigmahat=0 # noise on influencers
-    sigmatilde=0 # noise on media
-    a=1. #a=1 in paper, interaction strength between agents 
-    b=2. # interaction strength between agents and influencers
-    c=1. # interaction strength between agents and media
-    frictionI = 25 # friction for influencers
-    friction = 100  #friction for media
-    eta = 15  #rate constant for changing influencer 
+    # setting simulation parameters
+    dt = 0.01  # simulation stepsize 
     dx = 0.05
     dy = dx
     domain = [-2 2; -2 2]
     X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
-    #grid_points = [vec(X) vec(Y)] 
 
-    p = (; dt, n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta, dx, dy, domain, X, Y)
-
+    p = (; dt, dx, dy, domain, X, Y)
     return p
 end
 
-function ABMrandominitialconditions(p)
-    (; n, n_media, J) = p
+function ABMrandominitialconditions(P)
+    (; n, n_media, J) = P
 
     # agent opinions
     x = rand(n,2).*4 .-2 
@@ -95,38 +68,39 @@ function ABMrandominitialconditions(p)
     return x, media, inf, fol, state, Net, counts 
 end
 
+
 function attraction(x, Net)
     n = size(Net, 1)
     force = zeros(n,2)
     for j in 1:n
-        L=findall(x->x==1, Net[j,:]) # TODO: maybe simplify for complete network
+        L=findall(x->x==1, Net[j,:])
         if isempty(L)
             force[j,:]=[0 0]
         else
             fi = [0 0]
-            wsum=0
-            for i in 1:size(L,1)
+            w_sum=0
+            for i in 1:length(L)
                 d = x[L[i],:]-x[j,:]
-                w = exp(-(d[1]^2 +d[2]^2))
+                w = exp(-sqrt(d[1]^2 +d[2]^2))
                 fi = fi + w*d'
-                wsum = wsum+w
+                w_sum = w_sum+w
             end
-            force[j,:] = fi/wsum
+            force[j,:] = fi/w_sum
         end
     
     end
     return force
 end
 
-function influence(x,media,inf,fol,state,p)
-    (; n, b, c, J) = p
+function influence(x,media,inf,fol,state,P)
+    (; n, b, c, J) = P
     force1 =zeros(size(x))
     force2 =zeros(size(x))
     for j in 1:n
         if state[j]==1
-            force1[j,:] = media[:,2]-x[j,:]
+            force1[j,:] = media[2,:]-x[j,:]
         else  
-            force1[j,:] = media[:,1]-x[j,:]
+            force1[j,:] = media[1,:]-x[j,:]
         end
 
         for k in 1:J
@@ -139,8 +113,8 @@ function influence(x,media,inf,fol,state,p)
     return force
 end
 
-function changeinfluencer(state,x,fol,inf,p)
-    (; dt, eta, n, J) = p
+function changeinfluencer(state,x,fol,inf,P)
+    (; dt, eta, n, J) = P
     
     theta =0.1 #threshold for discrete g-function
     
@@ -155,7 +129,7 @@ function changeinfluencer(state,x,fol,inf,p)
     for i=1:J
         for j=1:n
             d = x[j,:]-inf[i,:]
-            dist[j,i]= exp(-(d[1]^2+d[2]^2))
+            dist[j,i]= exp(-sqrt(d[1]^2+d[2]^2))
         end
     end
     
@@ -163,19 +137,32 @@ function changeinfluencer(state,x,fol,inf,p)
     attractive = zeros(n, J)
     for j=1:n
         for i=1:J
-            g = state[j]*fraction[i]
-            if g<0 
-                g=theta
+            g2 = state[j]*fraction[i]
+            if g2<0 
+                g2=theta
             else
-                g=g+theta
+                g2=g2+theta
             end
-            attractive[j,i]= eta * dist[j,i]*g 
+            attractive[j,i]= eta * dist[j,i]*g2 
         end
 
+        # r=rand()
+        # lambda = sum(attractive[j,:]) #total jump rate
+        # alpha=-log(1-r)/lambda #random number distributed due to exp(lambda)
+        # if dt>alpha 
+        #     p = attractive[j,:]/lambda
+        #     r2=rand()
+        #     k=1
+        #     while sum(p[1:k])<r2
+        #         k=k+1
+        #     end
+        #     fol[j,:]=zeros(J)      
+        #     fol[j,k]=1
+        # end
+
         r=rand()
-        lambda = sum(attractive[j,:]) #total jump rate
-        alpha=-log(1-r)/lambda #random number distributed due to exp(lambda)
-        if dt>alpha 
+        lambda = sum(attractive[j,:])
+        if r<1-exp(-lambda*dt) 
             p = attractive[j,:]/lambda
             r2=rand()
             k=1
@@ -190,10 +177,12 @@ function changeinfluencer(state,x,fol,inf,p)
     return fol
 end
 
-function ABMsolve(NT = 100;  p = ABMconstruct())
-    
-    x, media, inf, fol, state,Net,counts  = ABMrandominitialconditions(p)
-    dt, n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, friction, eta= p
+
+
+function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters())
+    P = (; p..., q...)
+    x, media, inf, fol, state,Net,counts  = ABMrandominitialconditions(P)
+    (; dt, n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, frictionM, eta) = P
 
     xs = [x] #initial condition
     infs = [inf]
@@ -203,9 +192,13 @@ function ABMsolve(NT = 100;  p = ABMconstruct())
     for k in 2:NT
         xold = x
         # opinions change due to opinions of friends, influencers and media
-        force = a * attraction(xold,Net) + influence(xold,media,inf,fol,state,p)
+        force = a * attraction(xold,Net) + influence(xold,media,inf,fol,state,P)
         x = xold + dt*force + sqrt(dt*sigma)*randn(n,2); 
-        # note that there are no boundary conditions, agents could escape [-2,2]x[-2,2]
+        # dont allow agents to escape domain
+        ind1 = findall(x->x>2,x)
+        ind2 = findall(x->x<-2,x)
+        x[ind1] .= 2
+        x[ind2] .= -2
 
 
         # influencer opinions adapt slowly to opinions of followers with friction
@@ -225,12 +218,12 @@ function ABMsolve(NT = 100;  p = ABMconstruct())
         for i in 1:n_media
             x_M = findall(x->x==states[i], state)
             masscenter[i,:] = sum(xold[x_M,:], dims=1)/size(x_M,1)
-            media[i,:] = media[i,:]  + dt/friction * (masscenter[i,:] -media[i,:]) + 1/friction * sqrt(dt*sigmatilde)*randn(2,1)
+            media[i,:] = media[i,:]  + dt/frictionM * (masscenter[i,:] -media[i,:]) + 1/frictionM * sqrt(dt*sigmatilde)*randn(2,1)
         end
         
         # individual may jump from one influencer to another
         # jumps according to rate model
-        fol = changeinfluencer(state,xold,fol,inf,p)
+        fol = changeinfluencer(state,xold,fol,inf,P)
 
         xs = push!(xs,copy(x))
         infs = push!(infs, copy(inf))
@@ -238,19 +231,10 @@ function ABMsolve(NT = 100;  p = ABMconstruct())
         xinfs = push!(xinfs, copy(fol * collect(1:J)))
     end
 
-    return xs, xinfs, infs, meds, state, p, counts
+    return xs, xinfs, infs, meds, state, P, counts
 
 end
-#= 
-function plothist(x)
-    dx = 0.25 #0.05
-    edges = (-2:dx:2, -2:dx:2)
-    data = (x[:,1], x[:,2])
-    h = fit(Histogram, data, edges)
-    subp = histogram2d(data, bins=edges) #heatmap(h.weights)
-    return subp
-end
- =#
+ 
 function sumgaussian(x, centers)
     output = 0
     for i in 1:size(centers,1)
@@ -259,8 +243,8 @@ function sumgaussian(x, centers)
     return output
 end 
 
-function kdeplot(centers, inf, media,  p; title = "",labely ="", labelz ="")
-    (;X, Y, domain, dx, dy, n) = p
+function kdeplot(centers, inf, media,  P; title = "",labely ="", labelz ="")
+    (;X, Y, domain, dx, dy, n) = P
 
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
@@ -273,15 +257,15 @@ function kdeplot(centers, inf, media,  p; title = "",labely ="", labelz ="")
     return subp
 end
 
-function ABMsolveplot(NT = 100;  p = ABMconstruct())
-    (;dt) = p
-    @time xs, xinfs, infs, meds, state, p, counts = ABMsolve(NT;  p=p)
-    ABMplotarray(xs[end], xinfs[end],state,  infs[end], meds[end],  p, dt*NT)
-    return xs, xinfs, infs, meds, state, p, counts
+function ABMsolveplot(NT = 100;  p = ABMconstruct(), q=parameters())
+    @time xs, xinfs, infs, meds, state, P, counts = ABMsolve(NT;  p=p, q=q)
+    (;dt) = P
+    ABMplotarray(xs[end], xinfs[end],state,  infs[end], meds[end],  P, dt*NT)
+    return xs, xinfs, infs, meds, state, P, counts
 end
 
-function ABMplotarray(x, xinf, state, inf, media,  p, t; save = true)
-    (; J) = p
+function ABMplotarray(x, xinf, state, inf, media,  P, t; save = true)
+    (; J,n) = P
     plot_array = Any[]  
     z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄"]
@@ -294,9 +278,9 @@ function ABMplotarray(x, xinf, state, inf, media,  p, t; save = true)
             choice = intersect(xi, xm)
 
 
-            title = string(dens_labels[i,j],"(", string(t), ")")    
+            title = string(dens_labels[i,j],"(", string(t), "), prop = ", string(length(choice)/n)) 
             # make a plot and add it to the plot_array
-            push!(plot_array, kdeplot(x[choice,:], inf[j,:], media[i,:], p; title = title,labely = y_labels[j], labelz = z_labels[i]))
+            push!(plot_array, kdeplot(x[choice,:], inf[j,:], media[i,:], P; title = title,labely = y_labels[j], labelz = z_labels[i]))
         end
     end
     plot(plot_array..., layout=(4,2),size=(1000,1000)) |> display
@@ -306,9 +290,9 @@ function ABMplotarray(x, xinf, state, inf, media,  p, t; save = true)
     end
 end
 
-function ABMplotsingle(x, xinf, state, inf, media,  p, t; save = true)
-    (; J) = p
-    subp= kdeplot(x, inf', media', p)
+function ABMplotsingle(x, inf, media,  P, t; save = true)
+    (; J) = P
+    subp= kdeplot(x, inf', media', P)
 
     plot(subp) |> display
 
@@ -317,24 +301,69 @@ function ABMplotsingle(x, xinf, state, inf, media,  p, t; save = true)
     end
 end
 
-function ABMgifarray(xs, xinfs, state, infs, meds, p; dN=10)
+function ABMgifarray(xs, xinfs, state, infs, meds, P; dN=10)
     NT=size(xs,1)
-    (;dt) = p
+    (;dt) = P
     #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
  
     abmgif = @animate for t = 1:dN:NT
-        ABMplotarray(xs[t], xinfs[t], state, infs[t], meds[t],  p, t*dt; save = false)
+        ABMplotarray(xs[t], xinfs[t], state, infs[t], meds[t],  P, t*dt; save = false)
     end
-    Plots.gif(abmgif, "img/ABMevolution.gif", fps = 30)
+    Plots.gif(abmgif, "img/ABMevolution.gif", fps = 100)
 end
 
-function ABMgifsingle(xs, xinfs, state, infs, meds, p; dN=10)
+function ABMgifsingle(xs, xinfs, state, infs, meds, P; dN=10)
     NT=size(xs,1)
-    (;dt) = p
+    (;dt) = P
     #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
  
     abmgif = @animate for t = 1:dN:NT
-        ABMplotsingle(xs[t], xinfs[t], state, infs[t], meds[t],  p, t*dt; save = false)
+        ABMplotsingle(xs[t], infs[t], meds[t], P, t*dt; save = false)
     end
-    Plots.gif(abmgif, "img/ABMevolutionsingle.gif", fps = 30)
+    Plots.gif(abmgif, "img/ABMevolutionsingle.gif", fps = 100)
+end
+
+
+function ABMsolveensemble(NT=100, N=10; init="random", p = ABMconstruct(), q= parameters())
+    P = (; p..., q...)
+    (; X, Y, domain, dx, dy, n) = P
+    x_arr = domain[1,1]:dx:domain[1,2]
+    y_arr = domain[2,1]:dy:domain[2,2] 
+    zs = zeros(2, 2, N)
+    ys = zeros(2, J, N)
+    us = zeros(N_x, N_y, 2, J,  N)
+    av_counts = zeros(J,2)
+    states = [-1 1]
+    Threads.@threads for k=1:N
+        xs, xinfs, infs, meds, state, _, counts = ABMsolve(NT;  p=p, q=q)
+        x = xs[end]
+        xinf = xinfs[end]
+        inf = infs[end]
+        media = meds[end]
+        av_counts = av_counts +  counts*(1/N)
+        for i in 1:2
+            for j in 1:J
+                xi  = findall(x-> x==j, xinf)
+                xm = findall(x-> x==states[i], state)
+                choice = intersect(xi, xm)
+                us[:,:,i,j,k] = [(1/n)*sumgaussian([X[i,j], Y[i,j]], x[choice,:]) for i in 1:size(X,1), j in 1:size(X,2)]
+                ys[:,j,k] = inf[j,:]
+            end
+            zs[:,i,k] = media[i,:]
+        end
+    end
+
+    @save "data/ABMensemble.jld2" us zs ys
+    return us, zs, ys, P, av_counts 
+end
+
+function ABMplotensemble(us, zs, ys, P; clmax = clmax)
+    (; dt) = P
+    plotensemble(us, zs, ys, P, dt*NT; title1 = "img/ABMensemble.png", title2 = "img/ABMensemble_influencer.png", clmax = clmax)
+end
+
+function runensembles(N; NT=100, tmax=1)
+    us, zs, ys, P, av_counts = solveensemble(tmax, N)
+    us2, zs2, ys2, P2, av_counts2 = ABMsolveensemble(NT,N)
+    return us, zs, ys, P, av_counts, us2, zs2, ys2, P2, av_counts2
 end
