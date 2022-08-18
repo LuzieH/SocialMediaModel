@@ -42,6 +42,11 @@ for i in 1:2
         xi  = findall(x-> x==j, xinf)
         xm = findall(x-> x==states[i], state)
         choice = intersect(xi, xm)
+        dx = 0.05 #0.05
+        edges = (-2-0.5*dx:dx:2, -2:dx:2+0.5*dx)
+        data = (x[choice,1], x[choice,2])
+        h = fit(Histogram, data, edges)
+        
         uABM[:,:,i,j] = [sumgaussian([X[i,j], Y[i,j]], x[choice,:]) for i in 1:size(X,1), j in 1:size(X,2)]
         yABM[:,j] = inf[j,:]
     end
@@ -84,7 +89,7 @@ for i in 1:2
     end
 end
 
-rhosum = sum(uABM, dims=(3,4))[:,:,1,1]
+rhosum = ones(81,81) * (1/81) *(1/81)*(1/dV) #sum(uABM, dims=(3,4))[:,:,1,1] #make it really constant everywhere (the sum of gaussians in not due to boundary effects...)
 APDE = a* agent_force(rhosum, K_matrix, W_matrix, dV)
 
 BCPDE = BPDE +CPDE
@@ -106,3 +111,34 @@ heatmap(BCABM[:,:,1]-BCPDErep[:,:,1])
 # is the problem in comparin the A force due to not integrating over fine enough grid??
 # but both times we are doing a discrete integration...
 # something else... test on small example where difference lies!
+# implement the two algorithms in parallel, so that they both output W matrix and K matrix
+
+function attraction2(x, Net)
+    n = size(Net, 1)
+    force = zeros(n,2)
+    W_matrix = zeros(n,n)
+    K_matrix = zeros(n,n,2)
+    for j in 1:n
+        L=findall(x->x==1, Net[j,:])
+        if isempty(L)
+            force[j,:]=[0 0]
+        else
+            fi = [0 0]
+            w_sum=0
+            for i in 1:length(L)
+                d = x[L[i],:]-x[j,:]
+                w = exp(-sqrt(d[1]^2 +d[2]^2))
+                fi = fi + w*d'
+                w_sum = w_sum+w
+                W_matrix[j,i] = w
+                K_matrix[j,i,:] = w*d'
+            end
+            force[j,:] = fi/w_sum
+        end
+    
+    end
+    return force, W_matrix, K_matrix
+end
+
+##### warum ist sum(uABM)*dV nicht 1??? because some gaussians lie outside of region  [-2,2], better to use indicator function as 
+# u_ABM?? maybe use histogram to build u_ABM??
