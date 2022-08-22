@@ -89,7 +89,7 @@ function centered_difference((N_x,N_y), (dx, dy))
     return C
 end
 
-function parameters(;J=4, b=2., eta=15.0)
+function parameters(;J=4, b=2.5, eta=15.0) #a=3 makes interesting case too
     a = 1. #a=1 in paper, interaction strength between agents 
     #b = 2. # interaction strength between agents and influencers
     c = 1. # interaction strength between agents and media
@@ -159,7 +159,7 @@ end
 #gaussian that integrates to 1 and centered at center
 gaussian(x, center, sigma=0.2) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
 
-function random_initialconditions(P)
+function inf_initialconditions(P)
     
     (; grid_points, N_x , N_y,  dV, J,n) = P
     random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
@@ -230,8 +230,8 @@ function noinf_initialconditions(P)
 end
 
 function constructinitial(scenario,P)
-    if scenario=="random"
-        uzy0, counts = random_initialconditions(P)
+    if scenario=="4inf"
+        uzy0, counts = inf_initialconditions(P)
     elseif scenario=="noinf"
         uzy0, counts = noinf_initialconditions(P)
     else
@@ -304,7 +304,7 @@ function sol2uyz(sol, t)
 end
 
 
-function solve(tmax=0.1; alg=nothing, scenario="random", p = PDEconstruct(), q= parameters())
+function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
     
     P = (; scenario, p..., q...)
     uzy0, counts = constructinitial(scenario,P)
@@ -316,7 +316,7 @@ function solve(tmax=0.1; alg=nothing, scenario="random", p = PDEconstruct(), q= 
     return sol, P, counts
 end
 
-function solveplot(tmax=0.1; alg=nothing, scenario="random", p = PDEconstruct(), q= parameters())
+function solveplot(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
     sol,P, counts = solve(tmax; alg=alg, scenario=scenario, p=p, q=q)
 
     u,z,y = sol2uyz(sol, tmax)
@@ -327,7 +327,7 @@ function solveplot(tmax=0.1; alg=nothing, scenario="random", p = PDEconstruct(),
 end
 
 
-function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="random", p = PDEconstruct(), q= parameters())
+function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
     P = (; p..., q...)
     (; N_x, N_y,J) = P
  
@@ -348,11 +348,11 @@ function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="ra
 
     end
 
-    @save string("data/ensemble",scenario,".jld2") us zs ys
+    @save string("data/pde_ensemble_",scenario,".jld2") us zs ys
     return us, zs, ys, P, av_counts 
 end
 
-function plotensemble(us, zs, ys, P, tmax; title1 = "img/ensemble", title2 = "img/ensemble_influencer", clmax = 0.5, scenario="random")
+function plotensemble(us, zs, ys, P, tmax; title1 = "img/pde_ensemble", title2 = "img/pde_ensemble_influencer_", clmax = 0.5, scenario="4inf")
     N = size(ys,4)
     savepoints = size(us,5)
     av_u = sum(us,dims=6)*(1/N)
@@ -364,7 +364,7 @@ function plotensemble(us, zs, ys, P, tmax; title1 = "img/ensemble", title2 = "im
         plotarray(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], P, savetimes[k]; save=false, clmax = clmax, scenario = scenario)
         savefig(string(title1,string(k),scenario,".png"))
         
-        if scenario=="random"
+        if scenario=="4inf"
             (;X, Y, domain, dx, dy, J) = P
             x_arr = domain[1,1]:dx:domain[1,2]
             y_arr = domain[2,1]:dy:domain[2,2]
@@ -379,23 +379,23 @@ function plotensemble(us, zs, ys, P, tmax; title1 = "img/ensemble", title2 = "im
 
 end
 
-function psensemble(tmax=0.1, N=10; alg=nothing, scenario="random")
+function psensemble(tmax=0.1, N=10; alg=nothing, scenario="4inf")
     us, zs, ys, P, av_counts  = solveensemble(tmax, N; alg=alg, scenario=scenario)
     plotensemble(us, zs, ys, P, tmax)
     return us, zs, ys, P, av_counts 
 end
 
-function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf), scenario="random")
+function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf), scenario="4inf")
     subp = heatmap(x_arr,y_arr, rho', title = title, c=:berlin, clims=clim)
     scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=6, lab=labelz)
-    if scenario=="random"
+    if scenario=="4inf"
         scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=6, lab=labely)
     end
     return subp
 end
 
 
-function plotarray(u,z,y, P, t; save=true, clmax = maximum(u), scenario="random")
+function plotarray(u,z,y, P, t; save=true, clmax = maximum(u), scenario="4inf")
     (; domain, dx, dy, dV, J) = P
 
     #u,z,y = sol2uyz(sol, t)
@@ -418,11 +418,11 @@ function plotarray(u,z,y, P, t; save=true, clmax = maximum(u), scenario="random"
     plot(array..., layout=(J,2),size=(1000,J*250)) |> display
 
     if save==true
-        savefig(string("img/pdearray",scenario,".png"))
+        savefig(string("img/pde_array_",scenario,".png"))
     end
 end
  
-function gifarray(sol, P, dt=0.01)
+function gifarray(sol, P, dt=0.01; scenario = "4inf")
 
     tmax=sol.t[end]
     #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
@@ -431,10 +431,10 @@ function gifarray(sol, P, dt=0.01)
         u,z,y = sol2uyz(sol, t)
         plotarray(u,z,y, P, t; save=false)
     end
-    Plots.gif(pdegif, "img/evolution.gif", fps = 10)
+    Plots.gif(pdegif, string("img/pde_array_",scenario,".gif"), fps = 10)
 end
 
-function plotsingle(u,z,y,P,t; save=true, scenario="random")
+function plotsingle(u,z,y,P,t; save=true, scenario="4inf")
     (; domain, dx, dy, J) = P
     #u,z,y = sol2uyz(sol, t)
 
@@ -443,25 +443,26 @@ function plotsingle(u,z,y,P,t; save=true, scenario="random")
 
     dens = dropdims(sum(u, dims=(3,4)), dims=(3,4))
     subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(t)), c=:berlin) 
-    scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=4)
-    if scenario=="random"
-        scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=4)|> display
+    scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=4, lab = "media")
+    if scenario=="4inf"
+        scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=4, lab="influencers")#|> display
     end
 
     if save==true
-        savefig(string("img/pdesingle",scenario,".png"))
+        savefig(string("img/pde_single_",scenario,".png"))
     end
 end
 
-function gifsingle(sol,P, dt=0.01)
+function gifsingle(sol,P, dt=0.01; scenario = "4inf")
+
     tmax=sol.t[end]
     #    cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
 
     pdegif = @animate for t = 0:dt:tmax
         u,z,y = sol2uyz(sol, t)
-        plotsingle(u,z,y,P,t,save=false)
+        plotsingle(u,z,y,P,t,save=false, scenario=scenario)
     end
-    Plots.gif(pdegif, "img/evolutionsingle.gif", fps = 10)
+    Plots.gif(pdegif,string("img/pde_single_",scenario,".gif"), fps = 10)
 end
 
 
