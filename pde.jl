@@ -87,7 +87,7 @@ function centered_difference((N_x,N_y), (dx, dy))
     return C
 end
 
-function parameters(;J=4, b=3., eta=15.0) #a=3 makes interesting case too
+function parameters(;J=4, b=5., eta=15.0) #a=3 makes interesting case too
     a = 1. #a=1 in paper, interaction strength between agents 
     #b = 2. # interaction strength between agents and influencers
     c = 1. # interaction strength between agents and media
@@ -100,7 +100,7 @@ function parameters(;J=4, b=3., eta=15.0) #a=3 makes interesting case too
     sigmatilde = 0 # noise on media
     frictionI = 2 # friction for influencers
     frictionM = 100  #friction for media
-    controlspeed = 0.1 #per t
+    controlspeed = 0.25 #per t
 
     q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed)
     return q
@@ -108,7 +108,7 @@ end
 
 function PDEconstruct()
     # Define the constants for the PDE
-    dx = 0.2
+    dx = 0.1
     dy = dx
     
     domain = [-2.5 2.5; -2.5 2.5]
@@ -323,12 +323,12 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
 
     # Solve the ODE
     prob = ODEProblem(f,uzy0,(0.0,tmax),P)
-    @time sol = DifferentialEquations.solve(prob, alg, progress=true,save_everystep=true,save_start=true,dense=false)
+    @time sol = DifferentialEquations.solve(prob, alg, save_start=true)
     
     return sol, P, counts
 end
 
-function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="controlled", p = PDEconstruct(), q= parameters())
+function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="controlled", p = PDEconstruct(), q= parameters(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
     
     P1 = (; scenario, p..., q...)
     uzy0, counts, controlled = constructinitial(scenario,P1)
@@ -336,7 +336,7 @@ function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="contr
 
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),P1)
-    @time sol1 = DifferentialEquations.solve(prob1, alg, progress=true, saveat = 0:0.1:tcontrol,save_start=true)
+    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = reltol)
     
     #add new influencer
     u,z,y = sol2uyz(sol1,tcontrol)
@@ -351,7 +351,7 @@ function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="contr
     
     # solve ODE with added influencer
     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),P2)
-    @time sol2 = DifferentialEquations.solve(prob2, alg, progress=true, saveat = 0:0.1:(tmax-tcontrol),save_start=true)
+    @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = reltol)
 
     return [sol1, sol2], [P1, P2], counts
 end
@@ -503,11 +503,11 @@ function plotsingle(u,z,y,P,t; save=true, scenario="4inf")
     y_arr = domain[2,1]:dy:domain[2,2] 
 
     dens = dropdims(sum(u, dims=(3,4)), dims=(3,4))
-    subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(t)), c=:berlin) 
+    subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(round(t, digits=2))), c=:berlin) 
     scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=4, lab = "media")
 
     if scenario!="noinf"
-        scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=4, lab="influencers")|> display
+        scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=4, lab="influencers")
     end
 
     subp |> display
