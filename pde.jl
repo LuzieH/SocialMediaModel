@@ -32,18 +32,14 @@ function gamma(grid_points, rho, y, eta,dV)
     Nx, Ny, I, J = size(rho)
     rate = zeros((Nx*Ny, I, J, J))
     m = dV*sum(rho, dims=(1,2))[1,1,:,:]
-    @inbounds for i=1:I #current attitude
-        for j in 1:J #current influencer
-            for j2 in 1:J #future influencer
-                if j2!=j
-                    for x in 1:Nx*Ny
-                        rate[x,i,j,j2] = exp(-norm(grid_points[x,:]-y[:,j2]))*g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
-                    end
-                end
-            end
-        end
+    dists = pairwise(Euclidean(), grid_points', y)
+
+for i in 1:I, j in 1:J, j2 in 1:J
+        j == j2 && continue
+        @. rate[:,i,j,j2] = eta * dists[:, j2] * g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
     end
-    return eta*reshape(rate,(Nx, Ny, I, J, J))
+
+    return reshape(rate,(Nx, Ny, I, J, J))
 end
 
 
@@ -87,15 +83,16 @@ function centered_difference((N_x,N_y), (dx, dy))
     return C
 end
 
-function parameters(;J=4, b=5., eta=15.0) #a=3 makes interesting case too
-    a = 1. #a=1 in paper, interaction strength between agents 
+
+function parameters(;J=4, b=3., eta=15.0) #a=3 makes interesting case too
+    a = 1. #a=1 in paper, interaction strength between agents
     #b = 2. # interaction strength between agents and influencers
     c = 1. # interaction strength between agents and media
     #eta = 15.0 #rate constant for changing influencer
     n = 250 #number of agents, important for random initial conditions
     #J = 4 #number of influencers
     n_media = 2
-    sigma = 0.5 # noise on individual agents 
+    sigma = 0.5 # noise on individual agents
     sigmahat = 0 # noise on influencers
     sigmatilde = 0 # noise on media
     frictionI = 2 # friction for influencers
@@ -110,7 +107,7 @@ function PDEconstruct()
     # Define the constants for the PDE
     dx = 0.1
     dy = dx
-    
+
     domain = [-2.5 2.5; -2.5 2.5]
     N_x = Int((domain[1,2]-domain[1,1])/dx+1)
     N_y = Int((domain[2,2]-domain[2,1])/dy+1) #so far only works if N_y = N_x
@@ -118,13 +115,13 @@ function PDEconstruct()
     dV = dx*dy # to integrate the agent distribution
     X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
-    grid_points = [vec(X) vec(Y)] 
+    grid_points = [vec(X) vec(Y)]
     # matrix of K evaluated at gridpoints
     K_matrix, W_matrix  = generate_K(grid_points)
 
     M = second_derivative((N_x,N_y), (dx, dy))
     C = centered_difference((N_x,N_y), (dx, dy))
- 
+
     p = (; grid_points, dx, dy, dV, X, Y, N, N_x, N_y, domain, K_matrix, W_matrix, C,  M)
 
     return p
@@ -132,7 +129,7 @@ end
 
 function initialconditions(P)
     (; N_x , N_y,  J, n, dV, domain, dx) = P
-    rho_0 = zeros(N_x, N_y, 2, 4) 
+    rho_0 = zeros(N_x, N_y, 2, 4)
     mid_y =Int(round(N_y/2))
     mid_x =Int(round(N_x/2))
     start_x = Int((domain[1,2] - 2)/dx + 1)
@@ -143,7 +140,7 @@ function initialconditions(P)
     rho_0[mid_x+2:end_x, mid_y+2:end_x,:,1] .= 1
     rho_0[mid_x+1, mid_x+1,:,:] .= 0.5
 
-    u0 = rho_0/(sum(rho_0)*dV) 
+    u0 = rho_0/(sum(rho_0)*dV)
     z2_0 = [1.,1.]
     z1_0 = [-1.,-1.]
     z0 = [z1_0  z2_0]
@@ -162,10 +159,10 @@ end
 gaussian(x, center, sigma=0.2) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
 
 function inf_initialconditions(P)
-    
+
     (; grid_points, N_x , N_y,  dV, J,n) = P
     random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
-    rho_0 = zeros(N_x, N_y, 2, J) 
+    rho_0 = zeros(N_x, N_y, 2, J)
     counts = zeros(J,2)
     y0 = zeros(2,J)
 
@@ -204,10 +201,10 @@ function inf_initialconditions(P)
 end
 
 function noinf_initialconditions(P)
-    
+
     (; grid_points, N_x , N_y,  dV, J ,n) = P
     random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
-    rho_0 = zeros(N_x, N_y, 2, 1) 
+    rho_0 = zeros(N_x, N_y, 2, 1)
     counts = zeros(1,2)
     y0 = zeros(2,1)
 
@@ -232,7 +229,7 @@ function noinf_initialconditions(P)
     controlled = zeros(1)
     return ArrayPartition(u0,z0,y0), counts, controlled
 end
- 
+
 function constructinitial(scenario,P)
     if scenario=="4inf"
         uzy0, counts, controlled = inf_initialconditions(P)
@@ -253,7 +250,7 @@ function f(duzy,uzy,P,t)
     D = sigma^2 * 0.5
     u, z, y2 = uzy.x
     du, dz, dy2 = duzy.x
-     
+
 
     rhosum = sum(u, dims=(3,4))[:,:,1,1]
     rhosum_j = sum(u, dims=3)
@@ -262,6 +259,7 @@ function f(duzy,uzy,P,t)
     m_j = dV*sum(u,dims=(1,2,3))
     Fagent = agent_force(rhosum, K_matrix, W_matrix, dV)
     rate_matrix = gamma(grid_points, u, y2, eta,dV)
+    reac = zeros(N_x, N_y)
     for i in 1:2
         for j in 1:J
             rho = @view  u[:,:,i,j]
@@ -271,19 +269,20 @@ function f(duzy,uzy,P,t)
             yj = @view y2[:,j]
             dyj = @view dy2[:,j]
 
-            force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)     
-            
+            force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)
+
             dive =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
-            reac = zeros(N_x, N_y)
+
+            reac .= 0
             for j2=1:J
                 if j2!= j
-                    reac += -rate_matrix[:,:,i,j,j2] .* rho + rate_matrix[:,:,i,j2,j] .* u[:,:,i,j2]
+                    @. @views reac += -rate_matrix[:,:,i,j,j2] .* rho + rate_matrix[:,:,i,j2,j] .* u[:,:,i,j2]
                 end
             end
-            
-            dif = D*(M*rho + rho*M')  
+
+            dif = D*(M*rho + rho*M')
             #balance fluxes at boundary (part of boundady conditions)
-            dif[1,:]+= -D/dx * (force[1,:,1].*rho[1,:]) 
+            dif[1,:]+= -D/dx * (force[1,:,1].*rho[1,:])
             dif[end,:]+= D/dx * (force[end,:,1].*rho[end,:])
             dif[:,1]+= -D/dy * (force[:,1,2].*rho[:,1])
             dif[:,end]+= D/dy * (force[:,end,2].*rho[:,end])
@@ -293,7 +292,7 @@ function f(duzy,uzy,P,t)
             mean_rhoi = 1/m_i[i] * dV*reshape(rhosum_i[:,:,i,:],1,N)*grid_points
             dzi .= 1/(frictionM) * (mean_rhoi' - zi)
 
-            if controlled[j] == 0 
+            if controlled[j] == 0
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
             else #controll movement
@@ -316,7 +315,7 @@ end
 
 
 function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
-    
+
     P = (; scenario, p..., q...)
     uzy0, counts, controlled = constructinitial(scenario,P)
     P = (; P..., controlled)
@@ -336,8 +335,10 @@ function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="contr
 
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),P1)
+
     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = reltol)
     
+
     #add new influencer
     u,z,y = sol2uyz(sol1,tcontrol)
     P2 = merge(P1, (;J=P1.J+1,controlled = [P1.controlled..., 1] ))
@@ -348,7 +349,7 @@ function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="contr
     y2[:,1:J-1] = y
     y2[:,J] =  1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
     uzy0 = ArrayPartition(u2,z,y2)
-    
+
     # solve ODE with added influencer
     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),P2)
     @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = reltol)
@@ -362,7 +363,7 @@ function solveplot(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q
     u,z,y = sol2uyz(sol, tmax)
 
     plotarray(u,z,y, P, tmax)
- 
+
     return sol, P, counts
 end
 
@@ -370,7 +371,7 @@ end
 function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
     P = (; p..., q...)
     (; N_x, N_y,J) = P
- 
+
     zs = zeros(2, 2, savepoints, N)
     ys = zeros(2, J, savepoints, N)
     us = zeros(N_x, N_y, 2, J, savepoints,  N)
@@ -389,7 +390,7 @@ function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4i
     end
 
     @save string("data/pde_ensemble_",scenario,".jld2") us zs ys
-    return us, zs, ys, P, av_counts 
+    return us, zs, ys, P, av_counts
 end
 
 function plotensemble(us, zs, ys, P, tmax; title1 = "img/pde_ensemble", title2 = "img/pde_ensemble_influencer_", clmax = 0.5, scenario="4inf")
@@ -403,7 +404,7 @@ function plotensemble(us, zs, ys, P, tmax; title1 = "img/pde_ensemble", title2 =
     for k in 1:savepoints
         plotarray(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], P, savetimes[k]; save=false, clmax = clmax, scenario = scenario)
         savefig(string(title1,string(k),scenario,".png"))
-        
+
         if scenario=="4inf"
             (;X, Y, domain, dx, dy, J) = P
             x_arr = domain[1,1]:dx:domain[1,2]
@@ -422,7 +423,7 @@ end
 function psensemble(tmax=0.1, N=10; alg=nothing, scenario="4inf")
     us, zs, ys, P, av_counts  = solveensemble(tmax, N; alg=alg, scenario=scenario)
     plotensemble(us, zs, ys, P, tmax)
-    return us, zs, ys, P, av_counts 
+    return us, zs, ys, P, av_counts
 end
 
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf), scenario="4inf")
@@ -442,20 +443,20 @@ function plotarray(u,z,y, P, t; save=true, clmax = maximum(u), scenario="4inf")
 
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
-    
-    array = Any[]  
+
+    array = Any[]
     z_labels = ["z₋₁","z₁" ]
     y_labels = ["y₁", "y₂", "y₃", "y₄", "y₅"]
     dens_labels = [  "ρ₋₁₁" "ρ₋₁₂" "ρ₋₁₃" "ρ₋₁₄" "ρ₋₁₅";"ρ₁₁" "ρ₁₂" "ρ₁₃" "ρ₁₄" "ρ₁₅"]
-    for j in 1:J    
+    for j in 1:J
         for i in 1:2
             # make a plot and add it to the array
             cl = (0, clmax) #limits colorbar
-            title = string(dens_labels[i,j],"(", string(round(t, digits=2)), "), prop = ", string(round(sum(u[:,:,i,j]*dV), digits = 3))) 
+            title = string(dens_labels[i,j],"(", string(round(t, digits=2)), "), prop = ", string(round(sum(u[:,:,i,j]*dV), digits = 3)))
             push!(array, plot_solution(u[:,:,i,j], z[:,i], y[:,j], x_arr, y_arr; title = title,labely = y_labels[j], labelz = z_labels[i], clim=cl, scenario=scenario))
         end
     end
-    plt = plot(array..., layout=(J,2),size=(1000,min(J*250,1000))) 
+    plt = plot(array..., layout=(J,2),size=(1000,min(J*250,1000)))
     plt |> display
 
     if save==true
@@ -470,7 +471,7 @@ function gifarray
 
     tmax=sol.t[end]
     #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
- 
+
     pdegif = @animate for t = 0:dt:tmax
         u,z,y = sol2uyz(sol, t)
         plotarray(u,z,y, P, t; save=false)
@@ -500,10 +501,12 @@ function plotsingle(u,z,y,P,t; save=true, scenario="4inf")
     #u,z,y = sol2uyz(sol, t)
 
     x_arr = domain[1,1]:dx:domain[1,2]
-    y_arr = domain[2,1]:dy:domain[2,2] 
+    y_arr = domain[2,1]:dy:domain[2,2]
 
     dens = dropdims(sum(u, dims=(3,4)), dims=(3,4))
+
     subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(round(t, digits=2))), c=:berlin) 
+
     scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=4, lab = "media")
 
     if scenario!="noinf"
@@ -547,7 +550,7 @@ end
 function solvenoinf(tmax; alg=nothing)
     sol, P, _ = solve(tmax; alg=alg,  scenario="noinf", p = PDEconstruct(), q= parameters(J=1, b=0, eta=0))
     return sol, P
-end    
+end
 
 function solveplotnoinf(tmax; alg=nothing)
     sol, P = solvenoinf(tmax; alg=alg)
