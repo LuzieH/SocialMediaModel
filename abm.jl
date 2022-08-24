@@ -1,6 +1,5 @@
 using LinearAlgebra
 using StatsBase
-using KernelDensity
 using Plots
 using JLD2
 
