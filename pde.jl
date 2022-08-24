@@ -36,12 +36,11 @@ function gamma(grid_points, rho, y, eta,dV)
 
     for i in 1:I, j in 1:J, j2 in 1:J
         j == j2 && continue
-        @. rate[:,i,j,j2] = eta * dists[:, j2] * g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
+        @. rate[:,i,j,j2] = eta * exp.(-dists[:, j2]) * g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
     end
 
     return reshape(rate,(Nx, Ny, I, J, J))
 end
-
 
 function agent_force(rho, K_matrix, W_matrix,  dV)
     force = zeros(size(rho)..., 2)
@@ -84,7 +83,7 @@ function centered_difference((N_x,N_y), (dx, dy))
 end
 
 
-function parameters(;J=4, b=3., eta=15.0) #a=3 makes interesting case too
+function parameters(;J=4, b=2.5, eta=15.0, controlspeed = 0.25, frictionI = 2) #a=3 makes interesting case too
     a = 1. #a=1 in paper, interaction strength between agents
     #b = 2. # interaction strength between agents and influencers
     c = 1. # interaction strength between agents and media
@@ -95,9 +94,8 @@ function parameters(;J=4, b=3., eta=15.0) #a=3 makes interesting case too
     sigma = 0.5 # noise on individual agents
     sigmahat = 0 # noise on influencers
     sigmatilde = 0 # noise on media
-    frictionI = 2 # friction for influencers
-    frictionM = 100  #friction for media
-    controlspeed = 0.25 #per t
+     # friction for influencers
+    frictionM = 100  #friction for medi
 
     q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed)
     return q
@@ -304,6 +302,7 @@ function f(duzy,uzy,P,t)
 
 
 end
+
 
 
 function sol2uyz(sol, t)
