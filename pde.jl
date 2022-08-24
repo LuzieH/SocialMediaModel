@@ -2,7 +2,7 @@ using DifferentialEquations, LinearAlgebra
 using RecursiveArrayTools
 using Plots
 using JLD2
-
+using Distances
 
 function generate_K(grid_points)
     N, d = size(grid_points)
@@ -34,7 +34,7 @@ function gamma(grid_points, rho, y, eta,dV)
     m = dV*sum(rho, dims=(1,2))[1,1,:,:]
     dists = pairwise(Euclidean(), grid_points', y)
 
-for i in 1:I, j in 1:J, j2 in 1:J
+    for i in 1:I, j in 1:J, j2 in 1:J
         j == j2 && continue
         @. rate[:,i,j,j2] = eta * dists[:, j2] * g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
     end
@@ -336,7 +336,7 @@ function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="contr
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),P1)
 
-    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = reltol)
+    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
     
 
     #add new influencer
@@ -352,7 +352,7 @@ function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="contr
 
     # solve ODE with added influencer
     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),P2)
-    @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = reltol)
+    @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = rtol)
 
     return [sol1, sol2], [P1, P2], counts
 end
