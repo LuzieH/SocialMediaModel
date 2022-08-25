@@ -36,7 +36,7 @@ function gamma(grid_points, rho, y, eta,dV)
 
     for i in 1:I, j in 1:J, j2 in 1:J
         j == j2 && continue
-        @. rate[:,i,j,j2] = eta * exp.(-dists[:, j2]) * g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
+        @views @. rate[:,i,j,j2] = eta * exp.(-dists[:, j2]) * g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
     end
 
     return reshape(rate,(Nx, Ny, I, J, J))
@@ -256,8 +256,11 @@ function f(duzy,uzy,P,t)
     m_i = dV*sum(u,dims = (1,2,4))
     m_j = dV*sum(u,dims=(1,2,3))
     Fagent = agent_force(rhosum, K_matrix, W_matrix, dV)
-    rate_matrix = gamma(grid_points, u, y2, eta,dV)
+    rate_matrix = gamma(grid_points, u, y2, eta, dV)
     reac = zeros(N_x, N_y)
+    dif  = similar(reac)
+    dive = similar(reac)
+    rhoforce = zeros(N_x, N_y, 2)
     for i in 1:2
         for j in 1:J
             rho = @view  u[:,:,i,j]
@@ -267,9 +270,15 @@ function f(duzy,uzy,P,t)
             yj = @view y2[:,j]
             dyj = @view dy2[:,j]
 
-            force = c * follower_force(zi, grid_points, N_x, N_y) + a * Fagent + b * follower_force(yj, grid_points, N_x, N_y)
+            rhoforce .= a .* Fagent
+                .+ b .* follower_force(yj, grid_points, N_x, N_y)
+                .+ c .* follower_force(zi, grid_points, N_x, N_y)
+            rhoforce .= rho .* rhoforce
 
-            dive =  C * (rho .* force[:,:,1]) + (rho .* force[:,:,2]) * C'
+            @views mul!(dive, C, rhoforce[:,:,1])
+            @views mul!(dive, rhoforce[:,:,2], C', 1, 1)
+            #@assert dive == C * rhoforce[:,:,1] + rhoforce[:,:,2] * C'
+
 
             reac .= 0
             for j2=1:J
@@ -278,14 +287,16 @@ function f(duzy,uzy,P,t)
                 end
             end
 
-            dif = D*(M*rho + rho*M')
-            #balance fluxes at boundary (part of boundady conditions)
-            dif[1,:]+= -D/dx * (force[1,:,1].*rho[1,:])
-            dif[end,:]+= D/dx * (force[end,:,1].*rho[end,:])
-            dif[:,1]+= -D/dy * (force[:,1,2].*rho[:,1])
-            dif[:,end]+= D/dy * (force[:,end,2].*rho[:,end])
+            a_AB_BAT!(dif, D, M, rho)
+            #@assert dif == D*(M*rho + rho*M')
 
-            drho .=  dif - dive + reac
+            #balance fluxes at boundary (part of boundady conditions)
+            dif[1,:]+= -D/dx * (rhoforce[1,:,1])
+            dif[end,:]+= D/dx * (rhoforce[end,:,1])
+            dif[:,1]+= -D/dy * (rhoforce[:,1,2])
+            dif[:,end]+= D/dy * (rhoforce[:,end,2])
+
+            drho .=  dif .- dive .+ reac
 
             mean_rhoi = 1/m_i[i] * dV*reshape(rhosum_i[:,:,i,:],1,N)*grid_points
             dzi .= 1/(frictionM) * (mean_rhoi' - zi)
@@ -303,6 +314,11 @@ function f(duzy,uzy,P,t)
 
 end
 
+# inplace Y = a*(A*B + B+A')
+function a_AB_BAT!(Y, a, A, B)
+    mul!(Y, A, B)
+    mul!(Y, B, A', a, a)
+end
 
 
 function sol2uyz(sol, t)
@@ -322,12 +338,12 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
     # Solve the ODE
     prob = ODEProblem(f,uzy0,(0.0,tmax),P)
     @time sol = DifferentialEquations.solve(prob, alg, save_start=true)
-    
+
     return sol, P, counts
 end
 
 function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="controlled", p = PDEconstruct(), q= parameters(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
-    
+
     P1 = (; scenario, p..., q...)
     uzy0, counts, controlled = constructinitial(scenario,P1)
     P1 = (; P1..., controlled)
@@ -336,7 +352,7 @@ function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="contr
     prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),P1)
 
     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
-    
+
 
     #add new influencer
     u,z,y = sol2uyz(sol1,tcontrol)
@@ -550,7 +566,7 @@ function plotsingle(u,z,y,P,t; save=true, scenario="4inf")
 
     dens = dropdims(sum(u, dims=(3,4)), dims=(3,4))
 
-    subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(round(t, digits=2))), c=:berlin) 
+    subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(round(t, digits=2))), c=:berlin)
 
     scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=4, lab = "media")
 
