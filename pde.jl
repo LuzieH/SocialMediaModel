@@ -83,8 +83,8 @@ function centered_difference((N_x,N_y), (dx, dy))
 end
 
 
-function parameters(;J=4, b=2.5, eta=15.0, controlspeed = 0.25, frictionI = 2) #a=3 makes interesting case too
-    a = 1. #a=1 in paper, interaction strength between agents
+function parameters(;J=4, b=2.5, eta=5.0, controlspeed = 0.25, frictionI = 5, a = 1. ) #a=3 makes interesting case too
+    #a = 1. #a=1 in paper, interaction strength between agents
     #b = 2. # interaction strength between agents and influencers
     c = 1. # interaction strength between agents and media
     #eta = 15.0 #rate constant for changing influencer
@@ -94,7 +94,7 @@ function parameters(;J=4, b=2.5, eta=15.0, controlspeed = 0.25, frictionI = 2) #
     sigma = 0.5 # noise on individual agents
     sigmahat = 0 # noise on influencers
     sigmatilde = 0 # noise on media
-     # friction for influencers
+    #frictionI # friction for influencers
     frictionM = 100  #friction for medi
 
     q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed)
@@ -294,7 +294,7 @@ function f(duzy,uzy,P,t)
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
             else #controll movement
-                dyj .= controlspeed* ([1.5 1.5]' - yj)
+                dyj .= controlspeed* ([1.35 1.35]' - yj)
             end
 
         end
@@ -366,6 +366,52 @@ function solveplot(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q
     return sol, P, counts
 end
 
+function vary_parameters_control(tcontrol = 5, tmax=40, savepoints = 4; alg=nothing, scenario="controlled", p = PDEconstruct(), bs=2:1:5, speeds=0.1:0.1:0.3, frictions=5:10:25, savedt=1., atol = 1e-3, rtol = 1e-2)
+    (; N_x, N_y) = p
+    J=5
+    zs = zeros(2, 2, savepoints, size(frictions,1), size(speeds,1),size(bs,1))
+    ys = zeros(2, J, savepoints, size(frictions,1), size(speeds,1),size(bs,1))
+    us = zeros(N_x, N_y, 2, J, savepoints, size(frictions,1), size(speeds,1),size(bs,1))
+    savetimes = LinRange(0, tmax-tcontrol, savepoints)
+    Threads.@threads for b in 1:size(bs,1)
+        Threads.@threads for s in 1:size(speeds,1)
+            Threads.@threads for f in 1:size(frictions,1)
+                q = parameters(b=bs[b], controlspeed=speeds[s], frictionI = frictions[f])
+                P=(;p...,q...)
+                sols, _ = solvecontrolled(tcontrol, tmax; alg=alg, scenario=scenario, p=p, q=q,savedt=savedt, atol = atol, rtol= rtol)
+                sol = sols[2]
+                P = merge(P,(;J=2))
+                anim = Animation()
+                for j in 1:savepoints
+                    u,z,y = sol2uyz(sol, savetimes[j])
+                    us[:,:,:,:,j,f,s,b] = u
+                    zs[:,:,j,f,s,b] = z
+                    ys[:,:,j,f,s,b] = y
+                    plt = plotarray(u,z,y, P, j; save=false)
+                    frame(anim, plt)
+                end
+                Plots.gif(anim, string("img/control_b",string(bs[b]),"speed",string(speeds[s]), "friction",string(frictions[f]),".gif"), fps = 10)
+            end
+        end
+    end
+    @save string("data/parameter_",scenario,".jld2") us zs ys bs speeds frictions
+    return us,ys,zs
+end
+
+#=
+for b in 1:size(bs,1)
+    for s in 1:size(speeds,1)
+        for fi in 1:size(frictions,1)
+            anim = Animation()
+            for t in 1:10
+                plt = plotarray(us[:,:,:,:,t,fi,s,b],zs[:,:,t,fi,s,b],ys[:,:,t,fi,s,b], P, t; save=false)
+                frame(anim, plt)
+            end
+            Plots.gif(anim, string("img/control_b",string(bs[b]),"speed",string(speeds[s]), "friction",string(frictions[fi]),".gif"), fps = 10)          
+        end
+    end
+end
+=#
 
 function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
     P = (; p..., q...)
