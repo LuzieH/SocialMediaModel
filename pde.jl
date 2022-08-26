@@ -83,7 +83,7 @@ function centered_difference((N_x,N_y), (dx, dy))
 end
 
 
-function parameters(;J=4, b=2.5, eta=5.0, controlspeed = 0.25, frictionI = 5, a = 1. ) #a=3 makes interesting case too
+function parameters(;J=4, b=2.5, eta=2.0, controlspeed = 0.25, frictionI = 5, a = 1. ) #a=3 makes interesting case too
     #a = 1. #a=1 in paper, interaction strength between agents
     #b = 2. # interaction strength between agents and influencers
     c = 1. # interaction strength between agents and media
@@ -270,9 +270,7 @@ function f(duzy,uzy,P,t)
             yj = @view y2[:,j]
             dyj = @view dy2[:,j]
 
-            rhoforce .= a .* Fagent
-                .+ b .* follower_force(yj, grid_points, N_x, N_y)
-                .+ c .* follower_force(zi, grid_points, N_x, N_y)
+            rhoforce .= a .* Fagent .+ b .* follower_force(yj, grid_points, N_x, N_y) .+ c .* follower_force(zi, grid_points, N_x, N_y)
             rhoforce .= rho .* rhoforce
 
             @views mul!(dive, C, rhoforce[:,:,1])
@@ -305,7 +303,7 @@ function f(duzy,uzy,P,t)
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
             else #controll movement
-                dyj .= controlspeed* ([1.35 1.35]' - yj)
+                dyj .= controlspeed* ([1.25 1.25]' - yj)
             end
 
         end
