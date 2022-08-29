@@ -4,6 +4,78 @@ using Plots
 using JLD2
 using Distances
 
+
+
+function parameters(;
+        J=4,  #number of influencers
+        b=2.5, # interaction strength between agents and influencers
+        eta=2.0, 
+        controlspeed = 0.25, 
+        frictionI = 5., 
+        a = 1., 
+        c = 1., # interaction strength between agents and media
+        #eta = 15.0, #rate constant for changing influencer
+        n = 250, #number of agents, important for random initial conditions
+        n_media = 2,
+        sigma = 0.5, # noise on individual agents
+        sigmahat = 0., # noise on influencers
+        sigmatilde = 0., # noise on media
+        #frictionI # friction for influencers
+        frictionM = 100.  #friction for medi
+    )
+
+    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed)
+    return q
+end
+
+function parameters_control()
+    q = parameters(eta=1., #range 1-3 is best
+    b=4., 
+    controlspeed=0.2, 
+    frictionI=10) #range 7.5-10 is good
+    return q
+end
+
+function ABMconstruct(;
+        # setting simulation parameters
+        dt = 0.01,  # simulation stepsize 
+        dx = 0.05,
+        dy = dx,
+        domain = [-2.5 2.5; -2.5 2.5]
+    )
+    X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
+    Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
+    dV = dx*dy
+
+    p = (; dt, dx, dy, domain, X, Y, dV)
+    return p
+end
+
+function PDEconstruct(;
+        # Define the constants for the PDE
+        dx = 0.1,
+        dy = dx,
+        domain = [-2.5 2.5; -2.5 2.5],
+    )
+    N_x = Int((domain[1,2]-domain[1,1])/dx+1)
+    N_y = Int((domain[2,2]-domain[2,1])/dy+1) #so far only works if N_y = N_x
+    N = N_x*N_y
+    dV = dx*dy # to integrate the agent distribution
+    X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
+    Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
+    grid_points = [vec(X) vec(Y)]
+    # matrix of K evaluated at gridpoints
+    K_matrix, W_matrix  = generate_K(grid_points)
+
+    M = second_derivative((N_x,N_y), (dx, dy))
+    C = centered_difference((N_x,N_y), (dx, dy))
+
+    p = (; grid_points, dx, dy, dV, X, Y, N, N_x, N_y, domain, K_matrix, W_matrix, C,  M)
+
+    return p
+end
+
+
 function generate_K(grid_points)
     N, d = size(grid_points)
     @assert d == 2
@@ -83,50 +155,10 @@ function centered_difference((N_x,N_y), (dx, dy))
 end
 
 
-function parameters(;J=4, b=2.5, eta=2.0, controlspeed = 0.25, frictionI = 5, a = 1. ) #a=3 makes interesting case too
-    #a = 1. #a=1 in paper, interaction strength between agents
-    #b = 2. # interaction strength between agents and influencers
-    c = 1. # interaction strength between agents and media
-    #eta = 15.0 #rate constant for changing influencer
-    n = 250 #number of agents, important for random initial conditions
-    #J = 4 #number of influencers
-    n_media = 2
-    sigma = 0.5 # noise on individual agents
-    sigmahat = 0 # noise on influencers
-    sigmatilde = 0 # noise on media
-    #frictionI # friction for influencers
-    frictionM = 100  #friction for medi
 
-    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed)
-    return q
-end
-
-function PDEconstruct()
-    # Define the constants for the PDE
-    dx = 0.1
-    dy = dx
-
-    domain = [-2.5 2.5; -2.5 2.5]
-    N_x = Int((domain[1,2]-domain[1,1])/dx+1)
-    N_y = Int((domain[2,2]-domain[2,1])/dy+1) #so far only works if N_y = N_x
-    N = N_x*N_y
-    dV = dx*dy # to integrate the agent distribution
-    X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
-    Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
-    grid_points = [vec(X) vec(Y)]
-    # matrix of K evaluated at gridpoints
-    K_matrix, W_matrix  = generate_K(grid_points)
-
-    M = second_derivative((N_x,N_y), (dx, dy))
-    C = centered_difference((N_x,N_y), (dx, dy))
-
-    p = (; grid_points, dx, dy, dV, X, Y, N, N_x, N_y, domain, K_matrix, W_matrix, C,  M)
-
-    return p
-end
-
-function initialconditions(P)
-    (; N_x , N_y,  J, n, dV, domain, dx) = P
+function initialconditions((p,q))
+    (; N_x , N_y,dV, domain, dx) = p
+    (; J, n) = q
     rho_0 = zeros(N_x, N_y, 2, 4)
     mid_y =Int(round(N_y/2))
     mid_x =Int(round(N_x/2))
@@ -156,9 +188,9 @@ end
 #gaussian that integrates to 1 and centered at center
 gaussian(x, center, sigma=0.2) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
 
-function inf_initialconditions(P)
-
-    (; grid_points, N_x , N_y,  dV, J,n) = P
+function inf_initialconditions((p,q))
+    (; N_x , N_y,dV, domain, dx, grid_points) = p
+    (; J, n) = q
     random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
     rho_0 = zeros(N_x, N_y, 2, J)
     counts = zeros(J,2)
@@ -198,9 +230,9 @@ function inf_initialconditions(P)
     return ArrayPartition(u0,z0,y0), counts, controlled
 end
 
-function noinf_initialconditions(P)
-
-    (; grid_points, N_x , N_y,  dV, J ,n) = P
+function noinf_initialconditions((p,q))
+    (; N_x , N_y,dV, domain, dx) = p
+    (; J, n) = q
     random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
     rho_0 = zeros(N_x, N_y, 2, 1)
     counts = zeros(1,2)
@@ -228,23 +260,24 @@ function noinf_initialconditions(P)
     return ArrayPartition(u0,z0,y0), counts, controlled
 end
 
-function constructinitial(scenario,P)
+function constructinitial(scenario,(p,q))
     if scenario=="4inf"
-        uzy0, counts, controlled = inf_initialconditions(P)
+        uzy0, counts, controlled = inf_initialconditions((p,q))
     elseif scenario=="noinf"
-        uzy0, counts, controlled = noinf_initialconditions(P)
+        uzy0, counts, controlled = noinf_initialconditions((p,q))
     elseif scenario =="uniform"
-        uzy0, counts, controlled = initialconditions(P)
+        uzy0, counts, controlled = initialconditions((p,q))
     elseif scenario=="controlled"
-            uzy0, counts, controlled = inf_initialconditions(P)
+            uzy0, counts, controlled = inf_initialconditions((p,q))
     end
     return uzy0, counts, controlled
 end
 
 
-function f(duzy,uzy,P,t)
+function f(duzy,uzy,(p,q),t)
     yield()
-    (; grid_points, N_x, N_y,  a, b, c, sigma, eta, K_matrix, W_matrix, dx,dy, dV, C,  M , N, J, frictionM, frictionI, controlled, controlspeed) = P
+    (; grid_points, N_x, N_y,N, K_matrix, W_matrix, dx,dy, dV, C,  M) = p
+    (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled, controlspeed) = q
     D = sigma^2 * 0.5
     u, z, y2 = uzy.x
     du, dz, dy2 = duzy.x
@@ -303,7 +336,7 @@ function f(duzy,uzy,P,t)
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
             else #controll movement
-                dyj .= controlspeed* ([1.25 1.25]' - yj)
+                dyj .= controlspeed* ([1.25 1.25]' - yj)./ norm([1.25 1.25]' - yj)
             end
 
         end
@@ -329,33 +362,33 @@ end
 
 function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
 
-    P = (; scenario, p..., q...)
-    uzy0, counts, controlled = constructinitial(scenario,P)
-    P = (; P..., controlled)
+    uzy0, counts, controlled = constructinitial(scenario,(p,q))
+    q = (; q..., controlled)
 
     # Solve the ODE
-    prob = ODEProblem(f,uzy0,(0.0,tmax),P)
+    prob = ODEProblem(f,uzy0,(0.0,tmax),(p,q))
     @time sol = DifferentialEquations.solve(prob, alg, save_start=true)
 
-    return sol, P, counts
+    return sol, (p,q), counts
 end
 
 function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="controlled", p = PDEconstruct(), q= parameters(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
 
-    P1 = (; scenario, p..., q...)
-    uzy0, counts, controlled = constructinitial(scenario,P1)
-    P1 = (; P1..., controlled)
+
+    uzy0, counts, controlled = constructinitial(scenario,(p,q))
+    q1 = (; q..., controlled)
 
     # Solve the ODE
-    prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),P1)
+    prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
 
     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
 
 
     #add new influencer
     u,z,y = sol2uyz(sol1,tcontrol)
-    P2 = merge(P1, (;J=P1.J+1,controlled = [P1.controlled..., 1] ))
-    (;N_x, N_y,J, grid_points,N) = P2
+    q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 1] ))
+    (;N_x, N_y, grid_points,N) = p
+    J= q2.J
     u2 = zeros(N_x, N_y, 2, J)
     u2[:,:,:,1:J-1] = u
     y2 = zeros(2, J)
@@ -364,51 +397,54 @@ function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="contr
     uzy0 = ArrayPartition(u2,z,y2)
 
     # solve ODE with added influencer
-    prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),P2)
+    prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),(p,q2))
     @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = rtol)
 
-    return [sol1, sol2], [P1, P2], counts
+    return [sol1, sol2], [(p,q1), (p,q2)], counts
 end
 
 function solveplot(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
-    sol,P, counts = solve(tmax; alg=alg, scenario=scenario, p=p, q=q)
+    sol,(p,q), counts = solve(tmax; alg=alg, scenario=scenario, p=p, q=q)
 
     u,z,y = sol2uyz(sol, tmax)
 
-    plotarray(u,z,y, P, tmax)
+    plt = plotarray(u,z,y, (p,q), tmax)
+    plt |> display
 
-    return sol, P, counts
+    return sol, (p,q), counts
 end
 
-function vary_parameters_control(tcontrol = 5, tmax=40, savepoints = 4; alg=nothing, scenario="controlled", p = PDEconstruct(), bs=2:1:5, speeds=0.1:0.1:0.3, frictions=5:10:25, savedt=1., atol = 1e-3, rtol = 1e-2)
+function vary_parameters_control(tcontrol = 5, tmax=40, savepoints = 4; alg=nothing, scenario="controlled", p = PDEconstruct(), bs=4.0, speeds=0.2, frictions=5:2.5:10., etas =1.:0.5:3. ,  savedt=1., atol = 1e-3, rtol = 1e-2)
     (; N_x, N_y) = p
     J=5
-    zs = zeros(2, 2, savepoints, size(frictions,1), size(speeds,1),size(bs,1))
-    ys = zeros(2, J, savepoints, size(frictions,1), size(speeds,1),size(bs,1))
-    us = zeros(N_x, N_y, 2, J, savepoints, size(frictions,1), size(speeds,1),size(bs,1))
+    zs = zeros(2, 2, savepoints,size(etas,1), size(frictions,1), size(speeds,1),size(bs,1))
+    ys = zeros(2, J, savepoints,size(etas,1), size(frictions,1), size(speeds,1),size(bs,1))
+    us = zeros(N_x, N_y, 2, J, savepoints,size(etas,1), size(frictions,1), size(speeds,1),size(bs,1))
     savetimes = LinRange(0, tmax-tcontrol, savepoints)
-    Threads.@threads for b in 1:size(bs,1)
-        Threads.@threads for s in 1:size(speeds,1)
-            Threads.@threads for f in 1:size(frictions,1)
-                q = parameters(b=bs[b], controlspeed=speeds[s], frictionI = frictions[f])
-                P=(;p...,q...)
-                sols, _ = solvecontrolled(tcontrol, tmax; alg=alg, scenario=scenario, p=p, q=q,savedt=savedt, atol = atol, rtol= rtol)
-                sol = sols[2]
-                P = merge(P,(;J=2))
-                anim = Animation()
-                for j in 1:savepoints
-                    u,z,y = sol2uyz(sol, savetimes[j])
-                    us[:,:,:,:,j,f,s,b] = u
-                    zs[:,:,j,f,s,b] = z
-                    ys[:,:,j,f,s,b] = y
-                    plt = plotarray(u,z,y, P, j; save=false)
-                    frame(anim, plt)
-                end
-                Plots.gif(anim, string("img/control_b",string(bs[b]),"speed",string(speeds[s]), "friction",string(frictions[f]),".gif"), fps = 10)
+    #Threads.@threads 
+    for b in 1:size(bs,1)
+        for s in 1:size(speeds,1)
+            for f in 1:size(frictions,1)
+                    for e in 1:size(etas,1)
+                        q = parameters(b=bs[b], controlspeed=speeds[s], frictionI = frictions[f], eta = etas[e])
+                        sols, Ps, _ = solvecontrolled(tcontrol, tmax; alg=alg, scenario=scenario, p=p, q=q,savedt=savedt, atol = atol, rtol= rtol)
+                        sol = sols[2]
+                        (p,q) = Ps[2]
+                        anim = Animation()
+                        for j in 1:savepoints
+                            u,z,y = sol2uyz(sol, savetimes[j])
+                            us[:,:,:,:,j,e,f,s,b] = u
+                            zs[:,:,j,e,f,s,b] = z
+                            ys[:,:,j,e,f,s,b] = y
+                            plt = plotsingle(u,z,y, (p,q), j; save=false)
+                            frame(anim, plt)
+                        end
+                        Plots.gif(anim, string("img/control_b",string(bs[b]),"speed",string(speeds[s]), "friction",string(frictions[f]), "eta",string(etas[e]),".gif"), fps = 10)
+                    end
             end
         end
     end
-    @save string("data/parameter_",scenario,".jld2") us zs ys bs speeds frictions
+    @save string("data/parameter_",scenario,".jld2") us zs ys bs speeds frictions etas
     return us,ys,zs
 end
 
@@ -428,15 +464,16 @@ end
 =#
 
 function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
-    P = (; p..., q...)
-    (; N_x, N_y,J) = P
+    (; N_x, N_y) = p
+    J=q.J
 
     zs = zeros(2, 2, savepoints, N)
     ys = zeros(2, J, savepoints, N)
     us = zeros(N_x, N_y, 2, J, savepoints,  N)
     savetimes = LinRange(0, tmax, savepoints)
     av_counts = zeros(J,2)
-    Threads.@threads for i=1:N
+    #Threads.@threads 
+    for i=1:N
         sol, _ , counts= solve(tmax; alg=alg, scenario=scenario, p=p, q=q)
         av_counts = av_counts +  counts*(1/N)
         for j in 1:savepoints
@@ -449,10 +486,10 @@ function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4i
     end
 
     @save string("data/pde_ensemble_",scenario,".jld2") us zs ys
-    return us, zs, ys, P, av_counts
+    return us, zs, ys, (p,q), av_counts
 end
 
-function plotensemble(us, zs, ys, P, tmax; title1 = "img/pde_ensemble", title2 = "img/pde_ensemble_influencer_", clmax = 0.5, scenario="4inf")
+function plotensemble(us, zs, ys, (p,q), tmax; title1 = "img/pde_ensemble", title2 = "img/pde_ensemble_influencer_", clmax = 0.5, scenario="4inf")
     N = size(ys,4)
     savepoints = size(us,5)
     av_u = sum(us,dims=6)*(1/N)
@@ -461,17 +498,18 @@ function plotensemble(us, zs, ys, P, tmax; title1 = "img/pde_ensemble", title2 =
     savetimes = LinRange(0,tmax,savepoints)
 
     for k in 1:savepoints
-        plotarray(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], P, savetimes[k]; save=false, clmax = clmax, scenario = scenario)
+        plotarray(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], (p,q), savetimes[k]; save=false, clmax = clmax, scenario = scenario)
         savefig(string(title1,string(k),scenario,".png"))
 
         if scenario=="4inf"
-            (;X, Y, domain, dx, dy, J) = P
+            (;X, Y, domain, dx, dy) = p
+            J= q.J
             x_arr = domain[1,1]:dx:domain[1,2]
             y_arr = domain[2,1]:dy:domain[2,2]
 
             yall = reshape(ys[:,:,k,:], (2,N*J))'
             evalkde = [sumgaussian([X[i,j], Y[i,j]], yall) for i in 1:size(X,1), j in 1:size(X,2)]
-            heatmap(x_arr, y_arr, evalkde', c=:berlin, title=string("Distribution of influencers at time ", string(round(savetimes[k], digits=2)))) |> display
+            heatmap(x_arr, y_arr, evalkde', c=:berlin, title=string("Distribution of influencers at time ", string(round(savetimes[k], digits=2)))) #|> display
             savefig(string(title2,string(k),".png"))
         end
     end
@@ -480,9 +518,9 @@ function plotensemble(us, zs, ys, P, tmax; title1 = "img/pde_ensemble", title2 =
 end
 
 function psensemble(tmax=0.1, N=10; alg=nothing, scenario="4inf")
-    us, zs, ys, P, av_counts  = solveensemble(tmax, N; alg=alg, scenario=scenario)
-    plotensemble(us, zs, ys, P, tmax)
-    return us, zs, ys, P, av_counts
+    us, zs, ys, (p,q), av_counts  = solveensemble(tmax, N; alg=alg, scenario=scenario)
+    plotensemble(us, zs, ys, (p,q), tmax)
+    return us, zs, ys, (p,q), av_counts
 end
 
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf), scenario="4inf")
@@ -495,8 +533,9 @@ function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", 
 end
 
 
-function plotarray(u,z,y, P, t; save=true, clmax = maximum(u), scenario="4inf")
-    (; domain, dx, dy, dV, J) = P
+function plotarray(u,z,y, (p,q), t; save=true, clmax = maximum(u), scenario="4inf")
+    (; domain, dx, dy, dV) = p
+    J= q.J
 
     #u,z,y = sol2uyz(sol, t)
 
@@ -516,7 +555,7 @@ function plotarray(u,z,y, P, t; save=true, clmax = maximum(u), scenario="4inf")
         end
     end
     plt = plot(array..., layout=(J,2),size=(1000,min(J*250,1000)))
-    plt |> display
+    plt #|> display
 
     if save==true
         savefig(string("img/pde_array_",scenario,".png"))
@@ -539,9 +578,9 @@ function gifarray
 end
 =#
 
-gifarray(sol, P, args...; kwargs...) = gifarray([sol], [P], args...; kwargs...)
+gifarray(sol, (p,q), args...; kwargs...) = gifarray([sol], [(p,q)], args...; kwargs...)
 
-function gifarray(sols::Vector, Ps::Vector, dt=0.01; scenario = "4inf")
+function gifarray(sols::Vector, Ps::Vector, dt=0.1; scenario = "4inf")
     T = 0
     anim = Animation()
     for (sol, P) in zip(sols, Ps)
@@ -555,8 +594,9 @@ function gifarray(sols::Vector, Ps::Vector, dt=0.01; scenario = "4inf")
     Plots.gif(anim, string("img/pde_array_",scenario,".gif"), fps = 10)
 end
 
-function plotsingle(u,z,y,P,t; save=true, scenario="4inf")
-    (; domain, dx, dy, J) = P
+function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf")
+    (; domain, dx, dy) = p
+    J= q.J
     #u,z,y = sol2uyz(sol, t)
 
     x_arr = domain[1,1]:dx:domain[1,2]
@@ -572,7 +612,7 @@ function plotsingle(u,z,y,P,t; save=true, scenario="4inf")
         scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=4, lab="influencers")
     end
 
-    subp |> display
+    subp # |> display
 
     if save==true
         savefig(string("img/pde_single_",scenario,".png"))
@@ -580,9 +620,9 @@ function plotsingle(u,z,y,P,t; save=true, scenario="4inf")
     return subp
 end
 
-gifsingle(sol, P, args...; kwargs...) = gifsingle([sol], [P], args...; kwargs...)
+gifsingle(sol, (p,q), args...; kwargs...) = gifsingle([sol], [(p,q)], args...; kwargs...)
 
-function gifsingle(sols::Vector, Ps::Vector, dt=0.01; scenario = "4inf")
+function gifsingle(sols::Vector, Ps::Vector, dt=0.1; scenario = "4inf")
     T = 0
     anim = Animation()
     for (sol, P) in zip(sols, Ps)
@@ -599,23 +639,22 @@ end
 function test_f()
     p = PDEconstruct()
     q = parameters()
-    P = (; p..., q...)
-    uzy0 = initialconditions(P)
+    uzy0 = initialconditions((p,q))
     duzy = copy(uzy0)
-    @time f(duzy, uzy0, P, 0)
+    @time f(duzy, uzy0, (p,q), 0)
     return duzy
 end
 
 function solvenoinf(tmax; alg=nothing)
-    sol, P, _ = solve(tmax; alg=alg,  scenario="noinf", p = PDEconstruct(), q= parameters(J=1, b=0, eta=0))
-    return sol, P
+    sol, (p,q), _ = solve(tmax; alg=alg,  scenario="noinf", p = PDEconstruct(), q= parameters(J=1, b=0, eta=0))
+    return sol, (p,q)
 end
 
 function solveplotnoinf(tmax; alg=nothing)
-    sol, P = solvenoinf(tmax; alg=alg)
-    (;scenario) =P
+    sol, (p,q) = solvenoinf(tmax; alg=alg)
+    (;scenario) = q
     u,z,y = sol2uyz(sol, tmax)
-    plotsingle(u,z,y,P,tmax; scenario=scenario)
-    plotarray(u,z,y, P, tmax;  scenario=scenario)
-    return sol, P
+    plotsingle(u,z,y,(p,q),tmax; scenario=scenario)
+    plotarray(u,z,y, (p,q), tmax;  scenario=scenario)
+    return sol, (p,q)
 end
