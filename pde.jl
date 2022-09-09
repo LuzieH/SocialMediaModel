@@ -8,31 +8,33 @@ using Distances
 
 function parameters(;
         J=4,  #number of influencers
-        b=2.5, # interaction strength between agents and influencers
-        eta=2.0, 
-        controlspeed = 0.25, 
-        frictionI = 5., 
-        a = 1., 
-        c = 1., # interaction strength between agents and media
-        #eta = 15.0, #rate constant for changing influencer
-        n = 250, #number of agents, important for random initial conditions
-        n_media = 2,
+        n_media = 2, #number of media
+        n = 250, #number of agents 
+        eta = 15.0, #rate constant for changing influencer  
+        controlspeed = 0.2, 
+        a = 1., #interaction strength between agents
+        b = 2.5, # interaction strength between agents and influencers
+        c = 1., # interaction strength between agents and media 
         sigma = 0.5, # noise on individual agents
         sigmahat = 0., # noise on influencers
         sigmatilde = 0., # noise on media
-        #frictionI # friction for influencers
-        frictionM = 100.  #friction for medi
+        frictionI = 10., # friction for influencers
+        frictionM = 100.,  #friction for media
+        controltarget = [1.25 1.25]
     )
 
-    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed)
+    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed,controltarget)
     return q
+end
+
+function parameters2()
+    return parameters(eta=5.)
 end
 
 function parameters_control()
     q = parameters(eta=1., #range 1-3 is best
-    b=4., 
-    controlspeed=0.2, 
-    frictionI=10) #range 7.5-10 is good
+    b=4.,
+    controltarget = [1.5 1.5]) 
     return q
 end
 
@@ -53,7 +55,7 @@ end
 
 function PDEconstruct(;
         # Define the constants for the PDE
-        dx = 0.1,
+        dx = 0.1, #0.05
         dy = dx,
         domain = [-2.5 2.5; -2.5 2.5],
     )
@@ -277,7 +279,7 @@ end
 function f(duzy,uzy,(p,q),t)
     yield()
     (; grid_points, N_x, N_y,N, K_matrix, W_matrix, dx,dy, dV, C,  M) = p
-    (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled, controlspeed) = q
+    (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled, controlspeed,controltarget) = q
     D = sigma^2 * 0.5
     u, z, y2 = uzy.x
     du, dz, dy2 = duzy.x
@@ -336,7 +338,7 @@ function f(duzy,uzy,(p,q),t)
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
             else #controll movement
-                dyj .= controlspeed* ([1.25 1.25]' - yj)./ norm([1.25 1.25]' - yj)
+                dyj .= controlspeed* (controltarget' - yj)./ norm(controltarget' - yj)
             end
 
         end
