@@ -32,7 +32,7 @@ function ABMinfinitialconditions((p,q))
     #initial opinions of influencers
     inf = zeros(J,2)
     for i in 1:J
-        inf[i,:] = sum(x[xI[i],:],dims=1)/size(xI[i],1)
+        inf[i,:] = sum(x[xI[i],:],dims=1)/size(xI[i],1)#+ rand(2)'*0.5
     end
 
     # initialization of political attitude state of all agents
@@ -216,7 +216,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf"
     for k in 2:NT
         xold = x
         # opinions change due to opinions of friends, influencers and media
-        force = a * attraction(xold,Net) + influence(xold,media,inf,fol,state,P)
+        force = a * attraction(xold,Net) + influence(xold,media,inf,fol,state,(p,q))
         x = xold + dt*force + sqrt(dt*sigma)*randn(n,2); 
         # dont allow agents to escape domain
         ind1 = findall(x->x>domain[1,2],x)
@@ -247,7 +247,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf"
         
         # individual may jump from one influencer to another
         # jumps according to rate model
-        fol = changeinfluencer(state,xold,fol,inf,P)
+        fol = changeinfluencer(state,xold,fol,inf,(p,q))
 
         xs = push!(xs,copy(x))
         infs = push!(infs, copy(inf))
@@ -275,7 +275,7 @@ function kdeplot(centers, inf, media, (p,q); title = "",labely ="", labelz ="", 
     y_arr = domain[2,1]:dy:domain[2,2]
     evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers) for i in 1:size(X,1), j in 1:size(X,2)]
     #K = kde(x, boundary = ((-2,2),(-2,2)))
-    subp = heatmap(x_arr, y_arr, evalkde', c=:berlin, title = title)
+    subp = heatmap(x_arr, y_arr, evalkde', c=:berlin, title = title,alpha=0.5)
     #scatter!(subp, centers[:,1], centers[:,2], markercolor=:white,markersize=3, lab = "agents")
     if scenario=="4inf"
         scatter!(subp, inf[1,:], inf[2,:], markercolor=:red,markersize=5, lab=labely)
@@ -285,10 +285,10 @@ function kdeplot(centers, inf, media, (p,q); title = "",labely ="", labelz ="", 
 end
 
 function ABMsolveplot(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf")
-    @time xs, xinfs, infs, meds, state, P, counts = ABMsolve(NT;  p=p, q=q, scenario=scenario)
-    (;dt) = P
+    @time xs, xinfs, infs, meds, state, (p,q), counts = ABMsolve(NT;  p=p, q=q, scenario=scenario)
+    (;dt) = p
     ABMplotarray(xs[end], xinfs[end],state,  infs[end], meds[end],  (p,q), dt*NT, scenario=scenario)
-    return xs, xinfs, infs, meds, state, P, counts
+    return xs, xinfs, infs, meds, state, (p,q), counts
 end
 
 function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenario="4inf")
@@ -307,7 +307,7 @@ function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenar
 
             title = string(dens_labels[i,j],"(", string(round(t, digits=2)), "), prop = ", string(length(choice)/n)) 
             # make a plot and add it to the plot_array
-            push!(plot_array, kdeplot(x[choice,:], inf[j,:], media[i,:], P; title = title,labely = y_labels[j], labelz = z_labels[i], scenario=scenario))
+            push!(plot_array, kdeplot(x[choice,:], inf[j,:], media[i,:], (p,q); title = title,labely = y_labels[j], labelz = z_labels[i], scenario=scenario))
         end
     end
     plot(plot_array..., layout=(J,2),size=(1000,J*250)) #|> display
@@ -320,7 +320,7 @@ end
 function ABMplotsingle(x, inf, media, state, (p,q), t; save = true, scenario="4inf")
     (; J) = q
     title =string("t = ", string(round(t, digits=2)))
-    subp= kdeplot(x, inf', media', P, scenario=scenario, title = title)
+    subp= kdeplot(x, inf', media', (p,q), scenario=scenario, title = title)
     x1 = findall(x-> x==-1, state)
     scatter!(subp, x[x1,1], x[x1,2], markercolor=:blue,markersize=3, lab = "attitute -1")
     x2 = findall(x-> x==1, state)
@@ -339,7 +339,7 @@ function ABMgifarray(xs, xinfs, state, infs, meds, (p,q); dN=5, scenario="4inf")
     #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
  
     abmgif = @animate for t = 1:dN:NT
-        ABMplotarray(xs[t], xinfs[t], state, infs[t], meds[t],  P, t*dt; save = false, scenario=scenario)
+        ABMplotarray(xs[t], xinfs[t], state, infs[t], meds[t],  (p,q), t*dt; save = false, scenario=scenario)
     end
     Plots.gif(abmgif, string("img/ABM_array",scenario,".gif"), fps = 10)
 end
