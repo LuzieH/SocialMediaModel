@@ -32,7 +32,7 @@ function parameters_control()
     q = parameters(eta=1., #range 1-3 is best
     b=4., 
     controlspeed=0.2, 
-    frictionI=10) #range 7.5-10 is good
+    frictionI=10.) #range 7.5-10 is good
     return q
 end
 
