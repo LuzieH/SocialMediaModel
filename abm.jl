@@ -156,10 +156,8 @@ function changeinfluencer(state,x,fol,inf,(p,q))
     for j=1:n
         for i=1:J
             g2 = state[j]*fraction[i]
-            if g2<0 
+            if g2<theta 
                 g2=theta
-            else
-                g2=g2+theta
             end
             attractive[j,i]= eta * dist[j,i]*g2 
         end
