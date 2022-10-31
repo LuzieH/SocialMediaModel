@@ -96,12 +96,13 @@ function generate_K(grid_points)
         k[i,j, 1] = ww * x
         k[i,j, 2] = ww * y
     end
+
     return k, w
 end
 
-function g(x)
-    if x>0
-        return 0.1+x
+function g(x) 
+    if x>0.1
+        return x
     else
         return 0.1
     end
