@@ -31,13 +31,15 @@ function parameters2()
     return parameters(eta=5.)
 end
 
+function parameters3() #for scenario noinf, the two clusters are well separated
+    return parameters(c=2., b=4.)
+end
+
 function parameters_control()
     q = parameters(eta=1., #range 1-3 is best
     b=4., 
     controlspeed=0.2, 
-    frictionI=10.,
     controltarget = [1.5 1.5]) 
-
     return q
 end
 

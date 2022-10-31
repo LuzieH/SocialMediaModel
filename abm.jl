@@ -10,7 +10,7 @@ using JLD2
 
 
 function ABMinfinitialconditions((p,q))
-    (; n, n_media, J) = q
+    (; n, J) = q
 
     # agent opinions
     x = rand(n,2).*4 .-2 
@@ -56,7 +56,7 @@ function ABMinfinitialconditions((p,q))
 end
 
 function ABMnoinfinitialconditions((p,q))
-    (; n, n_media, J) = q
+    (; n) = q
 
     # agent opinions
     x = rand(n,2).*4 .-2 
@@ -198,15 +198,18 @@ end
 
 
 function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf")
+    (; dt, domain) = p
+    (;n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, frictionM ) =q
 
     if scenario=="4inf"
         x, media, inf, fol, state,Net,counts  = ABMinfinitialconditions((p,q))
     elseif scenario=="noinf"
         x, media, inf, fol, state,Net,counts  =  ABMnoinfinitialconditions((p,q))
+        J=1
+        q=(;q..., J)
     end
 
-    (; dt, domain) = p
-    (;n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, frictionM, eta, ) =q
+
 
     xs = [x] #initial condition
     infs = [inf]
@@ -322,9 +325,9 @@ function ABMplotsingle(x, inf, media, state, (p,q), t; save = true, scenario="4i
     title =string("t = ", string(round(t, digits=2)))
     subp= kdeplot(x, inf', media', (p,q), scenario=scenario, title = title)
     x1 = findall(x-> x==-1, state)
-    scatter!(subp, x[x1,1], x[x1,2], markercolor=:blue,markersize=3, lab = "attitute -1")
+    scatter!(subp, x[x1,1], x[x1,2], markercolor=:blue,markersize=3, lab = "media 1")
     x2 = findall(x-> x==1, state)
-    scatter!(subp, x[x2,1], x[x2,2], markercolor=:white,markersize=3, lab = "attitute 1")
+    scatter!(subp, x[x2,1], x[x2,2], markercolor=:white,markersize=3, lab = "media 2")
 
     plot(subp) #|> display
 
