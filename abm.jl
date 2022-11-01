@@ -214,7 +214,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf"
     meds = [media]
     xinfs = [fol * collect(1:J)]
 
-    for k in 2:NT
+    for k in 2:NT+1
         xold = x
         # opinions change due to opinions of friends, influencers and media
         force = a * attraction(xold,Net) + influence(xold,media,inf,fol,state,(p,q))
@@ -268,7 +268,7 @@ function sumgaussian(x, centers)
     return output
 end 
 
-function kdeplot(centers, inf, media, (p,q); title = "",labely ="", labelz ="", scenario="4inf")
+function kdeplot(centers, inf, media, (p,q); title = "",labely ="", labelz ="", scenario="4inf",clim=(-Inf, Inf))
     (;X, Y, domain, dx, dy) = p
     n= q.n
 
@@ -276,7 +276,7 @@ function kdeplot(centers, inf, media, (p,q); title = "",labely ="", labelz ="", 
     y_arr = domain[2,1]:dy:domain[2,2]
     evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers) for i in 1:size(X,1), j in 1:size(X,2)]
     #K = kde(x, boundary = ((-2,2),(-2,2)))
-    subp = heatmap(x_arr, y_arr, evalkde', c=:berlin, title = title,alpha=0.5)
+    subp = heatmap(x_arr, y_arr, evalkde', c=:berlin, title = title,alpha=0.5, clims=clim)
     #scatter!(subp, centers[:,1], centers[:,2], markercolor=:white,markersize=3, lab = "agents")
     if scenario=="4inf"
         scatter!(subp, inf[1,:], inf[2,:], markercolor=:red,markersize=5, lab=labely)
@@ -305,7 +305,6 @@ function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenar
             xm = findall(x-> x==states[i], state)
             choice = intersect(xi, xm)
 
-
             title = string(dens_labels[i,j],"(", string(round(t, digits=2)), "), prop = ", string(length(choice)/n)) 
             # make a plot and add it to the plot_array
             push!(plot_array, kdeplot(x[choice,:], inf[j,:], media[i,:], (p,q); title = title,labely = y_labels[j], labelz = z_labels[i], scenario=scenario))
@@ -315,6 +314,32 @@ function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenar
 
     if save==true
         savefig(string("img/abm_array_",scenario,".png"))
+    end
+end
+
+function ABMplotsnapshots(xs, infs, meds, state, (p,q), ts; save = true, scenario="4inf")
+    (; J) = q
+    (;dt) = p
+    n_snapshots = length(ts)
+    plot_array = Any[]  
+    for s in 1:n_snapshots
+        t=ts[s]-dt
+        x=xs[t]
+        inf=infs[t]
+        media=meds[t]
+        title =string("t = ", string(round(t*dt, digits=2)))
+        subp= kdeplot(x, inf', media', (p,q), scenario=scenario, title = title, clim=(0,0.5))
+        x1 = findall(x-> x==-1, state)
+        scatter!(subp, x[x1,1], x[x1,2], markercolor=:blue,markersize=3, lab = "media 1")
+        x2 = findall(x-> x==1, state)
+        scatter!(subp, x[x2,1], x[x2,2], markercolor=:white,markersize=3, lab = "media 2")
+        push!(plot_array, subp)
+    end    
+    plot(plot_array..., layout=(n_snapshots,1),size=(90*6,n_snapshots*50*6))#, left_margin=10mm )
+
+
+    if save==true
+        savefig(string("img/abm_snapshots_",scenario,".png"))
     end
 end
 
@@ -333,6 +358,8 @@ function ABMplotsingle(x, inf, media, state, (p,q), t; save = true, scenario="4i
         savefig(string("img/abm_single_",scenario,".png"))
     end
 end
+
+
 
 function ABMgifarray(xs, xinfs, state, infs, meds, (p,q); dN=5, scenario="4inf")
     NT=size(xs,1)

@@ -48,7 +48,7 @@ function ABMconstruct(;
         dt = 0.01,  # simulation stepsize 
         dx = 0.05,
         dy = dx,
-        domain = [-2.5 2.5; -2.5 2.5]
+        domain = [-2.1 2.1; -2.1 2.1]
     )
     X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
@@ -62,7 +62,7 @@ function PDEconstruct(;
         # Define the constants for the PDE
         dx = 0.1, #0.05
         dy = dx,
-        domain = [-2.5 2.5; -2.5 2.5],
+        domain = [-2.1 2.1; -2.1 2.1],
     )
     N_x = Int((domain[1,2]-domain[1,1])/dx+1)
     N_y = Int((domain[2,2]-domain[2,1])/dy+1) #so far only works if N_y = N_x
