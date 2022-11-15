@@ -2,12 +2,21 @@ using LinearAlgebra
 using StatsBase
 using Plots
 using JLD2
+pyplot()
 
 #need to rename all functions to be unique from PDE???
 # TODO: adapt to different numbers of influencers and controlled influencers!
 # maybe change function g? 
 # plot: point cloud of agents and Kernel density estimation
 
+# https://nanx.me/ggsci/reference/pal_locuszoom.html
+#plotting parameters
+colors_followers = ["#5CB85CFF" "#EEA236FF" "#9632B8FF" "#B8B8B8FF"] 
+colors_leaders = ["#D43F3AFF"  "#357EBDFF"]
+markers_readers = [:circle  :utriangle :star5  :xcross]#  :diamond :cross ]
+size_leaders = 5
+size_individuals = 4
+cmap = :berlin  #:tempo :bilbao :grayC
 
 function ABMinfinitialconditions((p,q))
     (; n, J) = q
@@ -204,7 +213,9 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf"
     elseif scenario=="noinf"
         x, media, inf, fol, state,Net,counts  =  ABMnoinfinitialconditions((p,q))
         J=1
-        q=(;q..., J)
+        b=0
+        eta=0
+        q=(;q..., J,b,eta)
     end
 
 
@@ -260,35 +271,52 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf"
 
 end
  
-function sumgaussian(x, centers)
+function sumgaussian(x, centers;sigma=0.1)
     output = 0
     for i in 1:size(centers,1)
-        output = output +  gaussian(x, centers[i,:]) 
+        output = output +  gaussian(x, centers[i,:],sigma=sigma) 
     end
     return output
 end 
 
-function kdeplot(centers, inf, media, (p,q); title = "",labely ="", labelz ="", scenario="4inf",clim=(-Inf, Inf))
+function kdeplot(centers, inf, media, state, xinf, (p,q); title = "",labelx1 = "", labelx2="",labely ="", labelz ="", scenario="4inf",clim=(-Inf, Inf),color_agents=false,sigma=0.1,ylabel="")
     (;X, Y, domain, dx, dy) = p
+    (;J) = q
     n= q.n
 
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
-    evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers) for i in 1:size(X,1), j in 1:size(X,2)]
-    #K = kde(x, boundary = ((-2,2),(-2,2)))
-    subp = heatmap(x_arr, y_arr, evalkde', c=:berlin, title = title,alpha=0.5, clims=clim)
-    #scatter!(subp, centers[:,1], centers[:,2], markercolor=:white,markersize=3, lab = "agents")
-    if scenario=="4inf"
-        scatter!(subp, inf[1,:], inf[2,:], markercolor=:red,markersize=5, lab=labely)
+    evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers,sigma=sigma) for i in 1:size(X,1), j in 1:size(X,2)]
+
+    subp = heatmap(x_arr, y_arr, evalkde', c=cmap, title = title,alpha=0.5, clims=clim,ylabel=ylabel)
+    if color_agents==false
+        scatter!(subp, centers[:,1], centers[:,2], markercolor=:white,markersize=size_individuals, markerstrokewidth=0.25)
+    else
+
+        states = [-1 1]
+
+        for j in 1:J
+            for i in 1:2
+                xi  = findall(x-> x==j, xinf)
+                xm = findall(x-> x==states[i], state)
+                choice = intersect(xi, xm)
+                scatter!(subp, centers[choice,1], centers[choice,2], markercolor=colors_followers[j],markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.25, lab = labelx2)
+            end
+        end
+
+
     end
-    scatter!(subp, media[1,:], media[2,:], markercolor=:yellow,markersize=5, lab=labelz)
+    if scenario=="4inf"
+        scatter!(subp, inf[1,:], inf[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
+    end
+    scatter!(subp, media[1,:], media[2,:], markercolor=colors_leaders[2],markersize=size_leaders, lab=labelz)
     return subp
 end
 
 function ABMsolveplot(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf")
     @time xs, xinfs, infs, meds, state, (p,q), counts = ABMsolve(NT;  p=p, q=q, scenario=scenario)
     (;dt) = p
-    ABMplotarray(xs[end], xinfs[end],state,  infs[end], meds[end],  (p,q), dt*NT, scenario=scenario)
+    ABMplotarray(xs[end], xinfs[end],state,  infs[end], meds[end],  (p,q), dt*(NT-1), scenario=scenario)
     return xs, xinfs, infs, meds, state, (p,q), counts
 end
 
@@ -307,7 +335,7 @@ function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenar
 
             title = string(dens_labels[i,j],"(", string(round(t, digits=2)), "), prop = ", string(length(choice)/n)) 
             # make a plot and add it to the plot_array
-            push!(plot_array, kdeplot(x[choice,:], inf[j,:], media[i,:], (p,q); title = title,labely = y_labels[j], labelz = z_labels[i], scenario=scenario))
+            push!(plot_array, kdeplot(x[choice,:], inf[j,:], media[i,:], state[choice], xinf[choice,:], (p,q); title = title,labely = y_labels[j], labelz = z_labels[i], scenario=scenario))
         end
     end
     plot(plot_array..., layout=(J,2),size=(1000,J*250)) #|> display
@@ -317,40 +345,95 @@ function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenar
     end
 end
 
-function ABMplotsnapshots(xs, infs, meds, state, (p,q), ts; save = true, scenario="4inf")
+
+function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, scenario="4inf",sigma=0.1)
     (; J) = q
     (;dt) = p
     n_snapshots = length(ts)
     plot_array = Any[]  
     for s in 1:n_snapshots
-        t=ts[s]-dt
+        t=ts[s]
         x=xs[t]
         inf=infs[t]
         media=meds[t]
-        title =string("t = ", string(round(t*dt, digits=2)))
-        subp= kdeplot(x, inf', media', (p,q), scenario=scenario, title = title, clim=(0,0.5))
-        x1 = findall(x-> x==-1, state)
-        scatter!(subp, x[x1,1], x[x1,2], markercolor=:blue,markersize=3, lab = "media 1")
-        x2 = findall(x-> x==1, state)
-        scatter!(subp, x[x2,1], x[x2,2], markercolor=:white,markersize=3, lab = "media 2")
+        xinf = xinfs[t]
+        ylabel =string("t = ", string(round((t-1)*dt, digits=2)))
+
+        subp= kdeplot(x, inf', media', state, xinf, (p,q), scenario=scenario, clim=(0,0.5),color_agents=true,sigma=sigma,ylabel=ylabel)
+
         push!(plot_array, subp)
     end    
-    plot(plot_array..., layout=(n_snapshots,1),size=(90*6,n_snapshots*50*6))#, left_margin=10mm )
+    gridp=plot(plot_array..., layout=(n_snapshots,1),size=(95*5,n_snapshots*50*5),link=:all)#, left_margin=10mm )
+ 
 
+    for k=1:n_snapshots-1
+        plot!(gridp[k],xformatter=_->"")
+    end
 
     if save==true
         savefig(string("img/abm_snapshots_",scenario,".png"))
     end
 end
 
-function ABMplotsingle(x, inf, media, state, (p,q), t; save = true, scenario="4inf")
+
+function ABMplotfollowernumbers(xinfs,(p,q),scenario="4inf")
+    N = size(xinfs,1) #number of timesteps
+    (; J) = q
+    (;dt) = p
+    markers = [ "O"  "▽"  "△"  "☆"] #https://docs.julialang.org/en/v1/manual/unicode-input/
+    numbers = zeros(N,J)
+    for j in 1:J
+        for n in 1:N
+            numbers[n,j] = size(findall( x -> x == j, xinfs[n]),1)
+        end
+        if j==1
+            plot(dt*collect(1:N), numbers[:,j], label = markers[j],legend=:bottomleft)
+        else
+            plot!(dt*collect(1:N), numbers[:,j], label = markers[j])
+        end
+    end
+    savefig(string("img/abm_follower_",scenario,".png"))
+
+end
+
+
+"""
+scenario="4inf"
+#https://docs.juliaplots.org/latest/gallery/pyplot/generated/pyplot-ref58/ 
+
+N = size(xinfs,1) #number of timesteps
+(; J) = q
+(;dt) = p
+states = [-1 1]
+markers = [ "O"  "▽"  "△"  "☆"] #https://docs.julialang.org/en/v1/manual/unicode-input/
+colors=[:blue :black]
+numbers = zeros(N,2,J)
+
+for j in 1:J
+    for i=1:2
+        xm = findall(x-> x==states[i], state)
+        for n in 1:N
+            xinf = xinfs[n]
+            xi  = findall(x-> x==j, xinf)
+            
+            choice = intersect(xi, xm)
+            numbers[n,i,j] = size(choice,1)
+
+        end
+    end
+end
+
+
+areaplot(dt*collect(1:N), reshape(numbers,(N, J*2)), seriescolor = [:red :red  :green :green :blue :blue :grey :grey], fillalpha = [1 0.5 1 0.5 1 0.5 1 0.5])
+
+savefig(string("img/abm_follower_",scenario,".png"))
+"""
+
+
+function ABMplotsingle(x, inf,xinf, media, state, (p,q), t; save = true, scenario="4inf")
     (; J) = q
     title =string("t = ", string(round(t, digits=2)))
-    subp= kdeplot(x, inf', media', (p,q), scenario=scenario, title = title)
-    x1 = findall(x-> x==-1, state)
-    scatter!(subp, x[x1,1], x[x1,2], markercolor=:blue,markersize=3, lab = "media 1")
-    x2 = findall(x-> x==1, state)
-    scatter!(subp, x[x2,1], x[x2,2], markercolor=:white,markersize=3, lab = "media 2")
+    subp= kdeplot(x, inf', media', state, xinf, (p,q), scenario=scenario, title = title,color_agents=true) 
 
     plot(subp) #|> display
 
@@ -367,7 +450,7 @@ function ABMgifarray(xs, xinfs, state, infs, meds, (p,q); dN=5, scenario="4inf")
     #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
  
     abmgif = @animate for t = 1:dN:NT
-        ABMplotarray(xs[t], xinfs[t], state, infs[t], meds[t],  (p,q), t*dt; save = false, scenario=scenario)
+        ABMplotarray(xs[t], xinfs[t], state, infs[t], meds[t],  (p,q), (t-1)*dt; save = false, scenario=scenario)
     end
     Plots.gif(abmgif, string("img/ABM_array",scenario,".gif"), fps = 10)
 end
@@ -378,13 +461,13 @@ function ABMgifsingle(xs, xinfs, state, infs, meds, (p,q); dN=5, scenario="4inf"
     #cl = (0, maximum(maximum(sol(t).x[1]) for t in 0:dt:tmax)) #limits colorbar
  
     abmgif = @animate for t = 1:dN:NT
-        ABMplotsingle(xs[t], infs[t], meds[t],state, (p,q), t*dt; save = false, scenario=scenario)
+        ABMplotsingle(xs[t], infs[t], xinfs[t], meds[t],state, (p,q), (t-1)*dt; save = false, scenario=scenario)
     end
     Plots.gif(abmgif, string("img/abm_single_",scenario,".gif"), fps = 10)
 end
 
 
-function ABMsolveensemble(NT=100, N=10; savepoints = 4, scenario="4inf", p = ABMconstruct(), q= parameters())
+function ABMsolveensemble(NT=200, N=10; savepoints = 4, scenario="4inf", p = ABMconstruct(), q= parameters(),sigma=0.1)
     (; X, Y, domain, dx, dy) = p
     (; n, J) = q
     x_arr = domain[1,1]:dx:domain[1,2]
@@ -412,7 +495,7 @@ function ABMsolveensemble(NT=100, N=10; savepoints = 4, scenario="4inf", p = ABM
                     xi  = findall(x-> x==j, xinf)
                     xm = findall(x-> x==states[i], state)
                     choice = intersect(xi, xm)
-                    us[:,:,i,j,m,k] = [(1/n)*sumgaussian([X[i,j], Y[i,j]], x[choice,:]) for i in 1:size(X,1), j in 1:size(X,2)]
+                    us[:,:,i,j,m,k] = [(1/n)*sumgaussian([X[i,j], Y[i,j]], x[choice,:],sigma=sigma) for i in 1:size(X,1), j in 1:size(X,2)]
                     ys[:,j,m,k] = inf[j,:]
                 end
                 zs[:,i,m,k] = media[i,:]
@@ -421,28 +504,100 @@ function ABMsolveensemble(NT=100, N=10; savepoints = 4, scenario="4inf", p = ABM
 
     end
 
-    @save string("data/abm_ensemble",scenario,".jld2") us zs ys
+    @save string("data/abm_ensemble_",scenario,".jld2") us zs ys
     return us, zs, ys, (p,q), av_counts 
 end
 
-function ABMplotensemble(us, zs, ys, (p,q), NT; clmax = clmax, scenario="4inf")
+function ABMplotensemble(us, zs, ys, (p,q), NT; clmax = 0.5, scenario="4inf")
     (; dt) = p
     plotensemble(us, zs, ys, (p,q), dt*NT; title1 = "img/abm_ensemble", title2 = "img/abm_ensemble_influencer", clmax = clmax,scenario=scenario)
 end
 
-function runensembles(N; NT=150, tmax=1.5)
-    us, zs, ys, (p,q), av_counts = solveensemble(tmax, N)
-    plotensemble(us, zs, ys,(p,q), tmax; clmax=0.5)
-    us2, zs2, ys2, (p2,q2), av_counts2 = ABMsolveensemble(NT,N)
-    ABMplotensemble(us2, zs2, ys2, (p2,q2), NT; clmax=0.5)
+ 
+function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; scenario="4inf")
+    # check if size(ys,4)==size(ys2,4) and size(us,5) == size(us2,5)
+    N = size(ys,4)
+    savepoints = size(us,5)
+    savetimes = LinRange(0,tmax,savepoints)
+
+    us_list = [us2, us]
+    zs_list = [zs2, zs]
+    ys_list = [ys2, ys]
+    p_list = [p2, p]
+    q_list = [q2, q]
+
+    plot_array = Any[]  
+
+    maxus = dropdims(maximum(dropdims(sum(us,dims=(3,4,6)),dims=(3,4,6))*(1/N),dims=(1,2)),dims=(1,2))
+    maxus2 = dropdims(maximum(dropdims(sum(us2,dims=(3,4,6)),dims=(3,4,6))*(1/N),dims=(1,2)),dims=(1,2))
+    for k in 1:savepoints
+        clmax = maximum([maxus[k],maxus2[k]])
+        for i in 1:2
+            usi = us_list[i]
+            zsi = zs_list[i]
+            ysi = ys_list[i]
+            p_i = p_list[i]
+            qi = q_list[i]
+    
+            av_u = sum(usi,dims=6)*(1/N)
+            av_z = sum(zsi,dims=4)*(1/N)
+            av_y = sum(ysi,dims=4)*(1/N)
+            if i==1
+                legend=false
+                ylabel = string("t=", string(round(savetimes[k], digits=2)))
+            else
+                legend=true
+                ylabel=""
+            end
+
+            if k==1
+                if i==1
+                    title="ABM"
+                else
+                    title = "PDE"
+                end
+            else
+                title=""
+            end
+            
+            subp = plotsingle(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], (p_i,qi),savetimes[k]; save=false, scenario=scenario, labely="", labelx="", legend=legend,clim=(0,clmax),title=title,ylabel=ylabel)
+            push!(plot_array, subp)
+
+        end
+    end
+    gridp = plot(plot_array..., layout=(savepoints,2),size=(95*6,savepoints*35*6),link=:all)#, left_margin=10mm )
+
+    #share axis
+    for k=1:savepoints
+        plot!(gridp[2k],yformatter=_->"")
+ 
+    end
+
+
+
+    for k=1:2*savepoints-2
+        plot!(gridp[k],xformatter=_->"")
+    end
+
+    savefig(string("img/ensemblesnapshots_",scenario,".png"))
+
+end
+
+
+
+function runensembles(N; NT=200, tmax=2., savepoints = 5, q=parameters(),clmax=0.5,sigma=0.1) #0.025 works well with 1000 siulations
+    us, zs, ys, (p,q), av_counts = solveensemble(tmax, N;savepoints=savepoints, q=q)
+    plotensemble(us, zs, ys,(p,q), tmax; clmax=clmax)
+    us2, zs2, ys2, (p2,q2), av_counts2 = ABMsolveensemble(NT,N; savepoints=savepoints, q=q,sigma=sigma)
+    ABMplotensemble(us2, zs2, ys2, (p2,q2), NT; clmax=clmax)
     return us, zs, ys, (p,q), av_counts, us2, zs2, ys2, (p2,q2), av_counts2
 end
 
-function runensembles_noinf(N; NT=150, tmax=1.5)
+function runensembles_noinf(N; NT=100, tmax=1.,savepoints = 5, q=parameters(),clmax=0.5,sigma=0.1)
     scenario="noinf"
-    us, zs, ys, (p,q), av_counts = solveensemble(tmax, N; scenario=scenario, q= parameters(J=1, b=0, eta=0))
-    plotensemble(us, zs, ys, (p,q), tmax; clmax=0.5,scenario=scenario)
-    us2, zs2, ys2, (p2,q2), av_counts2 = ABMsolveensemble(NT,N; scenario=scenario, q= parameters(J=1, b=0, eta=0))
-    ABMplotensemble(us2, zs2, ys2, (p2,q2), NT; clmax=0.5,scenario=scenario)
+    us, zs, ys, (p,q), av_counts = solveensemble(tmax, N; scenario=scenario, savepoints=savepoints, q=q)
+    plotensemble(us, zs, ys, (p,q), tmax; clmax=clmax,scenario=scenario)
+    us2, zs2, ys2, (p2,q2), av_counts2 = ABMsolveensemble(NT,N; scenario=scenario, savepoints=savepoints, q=q,sigma=sigma)
+    ABMplotensemble(us2, zs2, ys2, (p2,q2), NT; clmax=clmax,scenario=scenario)
     return us, zs, ys, (p,q), av_counts, us2, zs2, ys2, (p2,q2), av_counts2
 end

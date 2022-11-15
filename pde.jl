@@ -3,7 +3,7 @@ using RecursiveArrayTools
 using Plots
 using JLD2
 using Distances
-
+pyplot()
 
 
 function parameters(;
@@ -43,12 +43,21 @@ function parameters_control()
     return q
 end
 
+function parameters_control2(;controlspeed=0.2)
+    q = parameters(eta=1., #range 1-3 is best
+    b=4., 
+    c=2.,
+    controlspeed=controlspeed,
+    controltarget = [1.5 1.5]) 
+    return q
+end
+
 function ABMconstruct(;
         # setting simulation parameters
         dt = 0.01,  # simulation stepsize 
         dx = 0.05,
         dy = dx,
-        domain = [-2.1 2.1; -2.1 2.1]
+        domain =  2.15*[-1 1; -1 1]
     )
     X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
@@ -60,12 +69,12 @@ end
 
 function PDEconstruct(;
         # Define the constants for the PDE
-        dx = 0.1, #0.05
+        dx = 0.05, #0.05
         dy = dx,
-        domain = [-2.1 2.1; -2.1 2.1],
+        domain = 2.15*[-1 1; -1 1]
     )
-    N_x = Int((domain[1,2]-domain[1,1])/dx+1)
-    N_y = Int((domain[2,2]-domain[2,1])/dy+1) #so far only works if N_y = N_x
+    N_x = Int(round((domain[1,2]-domain[1,1])/dx+1))
+    N_y = Int(round((domain[2,2]-domain[2,1])/dy+1)) #so far only works if N_y = N_x
     N = N_x*N_y
     dV = dx*dy # to integrate the agent distribution
     X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
@@ -193,8 +202,8 @@ function initialconditions((p,q))
     return ArrayPartition(u0,z0,y0), counts, controlled
 end
 
-#gaussian that integrates to 1 and centered at center
-gaussian(x, center, sigma=0.2) = 1/(2*pi*sigma^2) * exp(-1/(2*sigma^2)*norm(x-center)^2)
+#2D gaussian that integrates to 1 and centered at center
+gaussian(x, center; sigma=0.1) = 1/(2*pi*sigma^2)* exp(-1/(2*sigma^2)*norm(x-center)^2)
 
 function inf_initialconditions((p,q))
     (; N_x , N_y,dV, domain, dx, grid_points) = p
@@ -272,13 +281,17 @@ function constructinitial(scenario,(p,q))
     if scenario=="4inf"
         uzy0, counts, controlled = inf_initialconditions((p,q))
     elseif scenario=="noinf"
+        J=1
+        b=0
+        eta=0
+        q=(;q..., J,b,eta)
         uzy0, counts, controlled = noinf_initialconditions((p,q))
     elseif scenario =="uniform"
         uzy0, counts, controlled = initialconditions((p,q))
     elseif scenario=="controlled"
-            uzy0, counts, controlled = inf_initialconditions((p,q))
+        uzy0, counts, controlled = inf_initialconditions((p,q))
     end
-    return uzy0, counts, controlled
+    return uzy0, counts, controlled,q
 end
 
 
@@ -369,7 +382,7 @@ end
 
 function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
 
-    uzy0, counts, controlled = constructinitial(scenario,(p,q))
+    uzy0, counts, controlled,q = constructinitial(scenario,(p,q))
     q = (; q..., controlled)
 
     # Solve the ODE
@@ -379,10 +392,10 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
     return sol, (p,q), counts
 end
 
-function solvecontrolled(tcontrol = 0.05, tmax=0.1; alg=nothing, scenario="controlled", p = PDEconstruct(), q= parameters(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
+function solvecontrolled(tcontrol = 5., tmax=15.; alg=nothing, scenario="controlled", p = PDEconstruct(), q= parameters(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
 
 
-    uzy0, counts, controlled = constructinitial(scenario,(p,q))
+    uzy0, counts, controlled,q = constructinitial(scenario,(p,q))
     q1 = (; q..., controlled)
 
     # Solve the ODE
@@ -516,7 +529,7 @@ function plotensemble(us, zs, ys, (p,q), tmax; title1 = "img/pde_ensemble", titl
 
             yall = reshape(ys[:,:,k,:], (2,N*J))'
             evalkde = [sumgaussian([X[i,j], Y[i,j]], yall) for i in 1:size(X,1), j in 1:size(X,2)]
-            heatmap(x_arr, y_arr, evalkde', c=:berlin, title=string("Distribution of influencers at time ", string(round(savetimes[k], digits=2)))) #|> display
+            heatmap(x_arr, y_arr, evalkde', c=cmap, title=string("Distribution of influencers at time ", string(round(savetimes[k], digits=2)))) #|> display
             savefig(string(title2,string(k),".png"))
         end
     end
@@ -531,14 +544,57 @@ function psensemble(tmax=0.1, N=10; alg=nothing, scenario="4inf")
 end
 
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf), scenario="4inf")
-    subp = heatmap(x_arr,y_arr, rho', title = title, c=:berlin, clims=clim)
-    scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=6, lab=labelz)
+    subp = heatmap(x_arr,y_arr, rho', title = title, c=cmap, clims=clim)
+    scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[2],markersize=size_leaders, lab=labelz)
     if scenario=="4inf"
-        scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=6, lab=labely)
+        scatter!(subp, y[1,:], y[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
     end
     return subp
 end
 
+plotsnapshots(sol, (p,q), args...; kwargs...) = plotsnapshots([sol], [(p,q)], args...; kwargs...)
+
+function gifarray(sols::Vector, Ps::Vector, dt=0.1; scenario = "4inf")
+    T = 0
+    anim = Animation()
+    for (sol, P) in zip(sols, Ps)
+        for t in 0:dt:sol.t[end]
+            u,z,y = sol2uyz(sol, t)
+            plt = plotarray(u,z,y, P, t+T; save=false)
+            frame(anim, plt)
+        end
+        T += sol.t[end]
+    end
+    Plots.gif(anim, string("img/pde_array_",scenario,".gif"), fps = 10)
+end
+
+
+function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, scenario="4inf")
+    n_snapshots = length(ts)
+    plot_array = Any[]  
+    sum_t = 0
+    for (sol, P) in zip(sols, Ps)
+        for t in ts
+            if t>= sum_t && t< sum_t + sol.t[end]  
+                u,z,y = sol2uyz(sol, t-sum_t)
+                ylabel =string("t = ", string(round(t, digits=2)))
+                title=""
+                subp = plotsingle(u,z,y,(p,q),t,save=false, scenario=scenario, labely="", labelx="",ylabel=ylabel,title=title)
+                push!(plot_array, subp)
+            end
+        end
+        sum_t+= sol.t[end]
+    end    
+    gridp=plot(plot_array..., layout=(n_snapshots,1),size=(95*5,n_snapshots*50*5),link=:all)#, left_margin=10mm )
+
+    for k=1:n_snapshots-1
+        plot!(gridp[k],xformatter=_->"")
+    end
+
+    if save==true
+        savefig(string("img/pde_snapshots_",scenario,".png"))
+    end
+end
 
 function plotarray(u,z,y, (p,q), t; save=true, clmax = maximum(u), scenario="4inf")
     (; domain, dx, dy, dV) = p
@@ -601,7 +657,7 @@ function gifarray(sols::Vector, Ps::Vector, dt=0.1; scenario = "4inf")
     Plots.gif(anim, string("img/pde_array_",scenario,".gif"), fps = 10)
 end
 
-function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf")
+function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf", labely="influencers", labelx="media", clim=(0,Inf), legend=true, ylabel="", title = string("t=", string(round(t, digits=2))))
     (; domain, dx, dy) = p
     J= q.J
     #u,z,y = sol2uyz(sol, t)
@@ -611,15 +667,15 @@ function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf")
 
     dens = dropdims(sum(u, dims=(3,4)), dims=(3,4))
 
-    subp = heatmap(x_arr,y_arr, dens', title = string("t=", string(round(t, digits=2))), c=:berlin)
+    subp = heatmap(x_arr,y_arr, dens', title = title,ylabel=ylabel, c=cmap,clim=clim,legend=legend )
 
-    scatter!(subp, z[1,:], z[2,:], markercolor=:yellow,markersize=4, lab = "media")
+    scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab = labelx)
 
     if scenario!="noinf"
-        scatter!(subp, y[1,:], y[2,:], markercolor=:red,markersize=4, lab="influencers")
+        scatter!(subp, y[1,:], y[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
     end
 
-    subp # |> display
+    #subp # |> display
 
     if save==true
         savefig(string("img/pde_single_",scenario,".png"))
@@ -652,16 +708,4 @@ function test_f()
     return duzy
 end
 
-function solvenoinf(tmax; alg=nothing)
-    sol, (p,q), _ = solve(tmax; alg=alg,  scenario="noinf", p = PDEconstruct(), q= parameters(J=1, b=0, eta=0))
-    return sol, (p,q)
-end
-
-function solveplotnoinf(tmax; alg=nothing)
-    sol, (p,q) = solvenoinf(tmax; alg=alg)
-    (;scenario) = q
-    u,z,y = sol2uyz(sol, tmax)
-    plotsingle(u,z,y,(p,q),tmax; scenario=scenario)
-    plotarray(u,z,y, (p,q), tmax;  scenario=scenario)
-    return sol, (p,q)
-end
+ 
