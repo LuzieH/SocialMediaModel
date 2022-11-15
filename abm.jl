@@ -11,12 +11,20 @@ pyplot()
 
 # https://nanx.me/ggsci/reference/pal_locuszoom.html
 #plotting parameters
-colors_followers = ["#5CB85CFF" "#EEA236FF" "#9632B8FF" "#B8B8B8FF"] 
-colors_leaders = ["#D43F3AFF"  "#357EBDFF"]
+#colors_followers = ["#5CB85CFF" "#EEA236FF" "#9632B8FF" "#B8B8B8FF"] 
+#colors_leaders = [ "#357EBDFF" "#D43F3AFF" ]
+#https://personal.sron.nl/~pault/
+#colors_followers = [ "#EE6677"  "#228833" "#CCBB44" "#66CCEE"  ] # "#4477AA" 
+#colors_leaders = ["#BBBBBB" "#4477AA" ]
+# https://nanx.me/ggsci/reference/pal_locuszoom.html
+colors_followers = [ "#44AA99"  "#DDCC77"  "#CC6677" "#88CCEE"  ] # "#4477AA" 
+colors_leaders = ["#BBBBBB" :black ]
+
 markers_readers = [:circle  :utriangle :star5  :xcross]#  :diamond :cross ]
-size_leaders = 5
-size_individuals = 4
-cmap = :berlin  #:tempo :bilbao :grayC
+size_leaders = 10
+size_individuals = 6
+cmap = :speed  #:tempo :bilbao :grayC
+color_noinf = :white
 
 function ABMinfinitialconditions((p,q))
     (; n, J) = q
@@ -171,20 +179,6 @@ function changeinfluencer(state,x,fol,inf,(p,q))
             attractive[j,i]= eta * dist[j,i]*g2 
         end
 
-        # r=rand()
-        # lambda = sum(attractive[j,:]) #total jump rate
-        # alpha=-log(1-r)/lambda #random number distributed due to exp(lambda)
-        # if dt>alpha 
-        #     p = attractive[j,:]/lambda
-        #     r2=rand()
-        #     k=1
-        #     while sum(p[1:k])<r2
-        #         k=k+1
-        #     end
-        #     fol[j,:]=zeros(J)      
-        #     fol[j,k]=1
-        # end
-
         r=rand()
         lambda = sum(attractive[j,:])
         if r<1-exp(-lambda*dt) 
@@ -279,18 +273,21 @@ function sumgaussian(x, centers;sigma=0.1)
     return output
 end 
 
-function kdeplot(centers, inf, media, state, xinf, (p,q); title = "",labelx1 = "", labelx2="",labely ="", labelz ="", scenario="4inf",clim=(-Inf, Inf),color_agents=false,sigma=0.1,ylabel="")
+function kdeplot(centers, inf, media, state, xinf, (p,q); title = "",labelx1 = "", labelx2="",labely ="", labelz ="", scenario="4inf",clim=(-Inf, Inf),color_agents=false,sigma=0.1,ylabel="", kde =true)
     (;X, Y, domain, dx, dy) = p
     (;J) = q
     n= q.n
 
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2]
-    evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers,sigma=sigma) for i in 1:size(X,1), j in 1:size(X,2)]
-
-    subp = heatmap(x_arr, y_arr, evalkde', c=cmap, title = title,alpha=0.5, clims=clim,ylabel=ylabel)
+    if kde==true
+        evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers,sigma=sigma) for i in 1:size(X,1), j in 1:size(X,2)]
+        subp = heatmap(x_arr, y_arr, evalkde', c=cmap, title = title,alpha=0.9, clims=clim,ylabel=ylabel)
+    else
+        subp=plot()
+    end
     if color_agents==false
-        scatter!(subp, centers[:,1], centers[:,2], markercolor=:white,markersize=size_individuals, markerstrokewidth=0.25)
+        scatter!(subp, centers[:,1], centers[:,2], markercolor=color_noinf,markersize=size_individuals, markerstrokewidth=0.5)
     else
 
         states = [-1 1]
@@ -300,7 +297,11 @@ function kdeplot(centers, inf, media, state, xinf, (p,q); title = "",labelx1 = "
                 xi  = findall(x-> x==j, xinf)
                 xm = findall(x-> x==states[i], state)
                 choice = intersect(xi, xm)
-                scatter!(subp, centers[choice,1], centers[choice,2], markercolor=colors_followers[j],markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.25, lab = labelx2)
+                if J>1
+                    scatter!(subp, centers[choice,1], centers[choice,2], markercolor=colors_followers[j],markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.5, lab = labelx2)
+                else
+                    scatter!(subp, centers[choice,1], centers[choice,2], markercolor=color_noinf,markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.5, lab = labelx2)
+                end
             end
         end
 
@@ -346,7 +347,7 @@ function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenar
 end
 
 
-function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, scenario="4inf",sigma=0.1)
+function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, scenario="4inf",sigma=0.1,kde=false)
     (; J) = q
     (;dt) = p
     n_snapshots = length(ts)
@@ -359,7 +360,7 @@ function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, 
         xinf = xinfs[t]
         ylabel =string("t = ", string(round((t-1)*dt, digits=2)))
 
-        subp= kdeplot(x, inf', media', state, xinf, (p,q), scenario=scenario, clim=(0,0.5),color_agents=true,sigma=sigma,ylabel=ylabel)
+        subp= kdeplot(x, inf', media', state, xinf, (p,q), scenario=scenario, clim=(0,0.5),color_agents=true,sigma=sigma,ylabel=ylabel,kde=kde)
 
         push!(plot_array, subp)
     end    
@@ -397,37 +398,49 @@ function ABMplotfollowernumbers(xinfs,(p,q),scenario="4inf")
 end
 
 
-"""
-scenario="4inf"
-#https://docs.juliaplots.org/latest/gallery/pyplot/generated/pyplot-ref58/ 
 
-N = size(xinfs,1) #number of timesteps
-(; J) = q
-(;dt) = p
-states = [-1 1]
-markers = [ "O"  "▽"  "△"  "☆"] #https://docs.julialang.org/en/v1/manual/unicode-input/
-colors=[:blue :black]
-numbers = zeros(N,2,J)
+function plotfollowernumbers(xinfs,state,(p,q);scenario="4inf")
 
-for j in 1:J
-    for i=1:2
-        xm = findall(x-> x==states[i], state)
-        for n in 1:N
-            xinf = xinfs[n]
-            xi  = findall(x-> x==j, xinf)
-            
-            choice = intersect(xi, xm)
-            numbers[n,i,j] = size(choice,1)
+    N = size(xinfs,1) #number of timesteps
+    (; J) = q
+    (;dt) = p
+    states = [-1 1]
+    numbers = zeros(N,2,J)
+    scolors = Any[]
+    alphas = Any[]
+    labels = Any[]
+    for j in 1:J
+        for i=1:2
+            xm = findall(x-> x==states[i], state)
+            for n in 1:N
+                xinf = xinfs[n]
+                xi  = findall(x-> x==j, xinf)
+                
+                choice = intersect(xi, xm)
+                numbers[n,i,j] = size(choice,1)
+                
+                
 
+            end
+            push!(alphas, i*0.5)
+            push!(scolors, colors_followers[j])
+            if j==1
+                if i==1
+                    push!(labels, "O") #https://docs.julialang.org/en/v1/manual/unicode-input/
+                else
+                    push!(labels,  "△")
+                end
+            else
+                push!(labels, "")
+            end
         end
     end
+
+    #https://docs.juliaplots.org/latest/gallery/pyplot/generated/pyplot-ref58/ 
+    areaplot(dt*collect(1:N), (1/N)*reshape(numbers,(N, J*2)), seriescolor = permutedims(scolors), fillalpha = permutedims(alphas),title="Proportion of followers",labels = permutedims(labels))
+
+    savefig(string("img/abm_follower_",scenario,".png"))
 end
-
-
-areaplot(dt*collect(1:N), reshape(numbers,(N, J*2)), seriescolor = [:red :red  :green :green :blue :blue :grey :grey], fillalpha = [1 0.5 1 0.5 1 0.5 1 0.5])
-
-savefig(string("img/abm_follower_",scenario,".png"))
-"""
 
 
 function ABMplotsingle(x, inf,xinf, media, state, (p,q), t; save = true, scenario="4inf")
