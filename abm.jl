@@ -17,13 +17,13 @@ pyplot()
 #colors_followers = [ "#EE6677"  "#228833" "#CCBB44" "#66CCEE"  ] # "#4477AA" 
 #colors_leaders = ["#BBBBBB" "#4477AA" ]
 # https://nanx.me/ggsci/reference/pal_locuszoom.html
-colors_followers = [ "#44AA99"  "#DDCC77"  "#CC6677" "#88CCEE"  ] # "#4477AA" 
+colors_followers = [ "#44AA99"  "#DDCC77"  "#CC6677" "#88CCEE"  ] # [cgrad(:gist_earth, 20, categorical = true)[i] for i in [6 15 10 18]] #
 colors_leaders = ["#BBBBBB" :black ]
 
 markers_readers = [:circle  :utriangle :star5  :xcross]#  :diamond :cross ]
 size_leaders = 10
 size_individuals = 6
-cmap = :speed  #:tempo :bilbao :grayC
+cmap =reverse(cgrad(:gist_earth)) #reverse(cgrad(:lapaz)) :batlow  
 color_noinf = :white
 
 function ABMinfinitialconditions((p,q))
@@ -284,7 +284,7 @@ function kdeplot(centers, inf, media, state, xinf, (p,q); title = "",labelx1 = "
         evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers,sigma=sigma) for i in 1:size(X,1), j in 1:size(X,2)]
         subp = heatmap(x_arr, y_arr, evalkde', c=cmap, title = title,alpha=0.9, clims=clim,ylabel=ylabel)
     else
-        subp=plot()
+        subp=plot(ylabel=ylabel)
     end
     if color_agents==false
         scatter!(subp, centers[:,1], centers[:,2], markercolor=color_noinf,markersize=size_individuals, markerstrokewidth=0.5)
@@ -402,7 +402,7 @@ end
 function plotfollowernumbers(xinfs,state,(p,q);scenario="4inf")
 
     N = size(xinfs,1) #number of timesteps
-    (; J) = q
+    (; J,n) = q
     (;dt) = p
     states = [-1 1]
     numbers = zeros(N,2,J)
@@ -437,7 +437,7 @@ function plotfollowernumbers(xinfs,state,(p,q);scenario="4inf")
     end
 
     #https://docs.juliaplots.org/latest/gallery/pyplot/generated/pyplot-ref58/ 
-    areaplot(dt*collect(1:N), (1/N)*reshape(numbers,(N, J*2)), seriescolor = permutedims(scolors), fillalpha = permutedims(alphas),title="Proportion of followers",labels = permutedims(labels))
+    areaplot(dt*collect(1:N), (1/n)*reshape(numbers,(N, J*2)), seriescolor = permutedims(scolors), fillalpha = permutedims(alphas),title="Proportion of followers",labels = permutedims(labels),size=(95*5,60*5),xlabel="t")
 
     savefig(string("img/abm_follower_",scenario,".png"))
 end

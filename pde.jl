@@ -546,7 +546,7 @@ end
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf), scenario="4inf")
     subp = heatmap(x_arr,y_arr, rho', title = title, c=cmap, clims=clim)
     scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[2],markersize=size_leaders, lab=labelz)
-    if scenario=="4inf"
+    if scenario!="noinf"
         scatter!(subp, y[1,:], y[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
     end
     return subp
@@ -669,7 +669,7 @@ function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf", labely="influence
 
     subp = heatmap(x_arr,y_arr, dens', title = title,ylabel=ylabel, c=cmap,clim=clim,legend=legend )
 
-    scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab = labelx)
+    scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[2],markersize=size_leaders, lab = labelx)
 
     if scenario!="noinf"
         scatter!(subp, y[1,:], y[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
