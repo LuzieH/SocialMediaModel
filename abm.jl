@@ -22,6 +22,7 @@ colors_leaders = ["#BBBBBB" :black ]
 
 markers_readers = [:circle  :utriangle :star5  :xcross]#  :diamond :cross ]
 size_leaders = 10
+size_leaders_pde = 6
 size_individuals = 6
 cmap =reverse(cgrad(:gist_earth)) #reverse(cgrad(:lapaz)) :batlow  
 color_noinf = :white

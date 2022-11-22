@@ -11,44 +11,24 @@ function parameters(;
         n_media = 2, #number of media
         n = 250, #number of agents 
         eta = 15.0, #rate constant for changing influencer  
-        controlspeed = 0.2, 
+        controlspeed = 0.3, 
         a = 1., #interaction strength between agents
-        b = 2.5, # interaction strength between agents and influencers
-        c = 1., # interaction strength between agents and media 
+        b = 4., # interaction strength between agents and influencers
+        c = 2., # interaction strength between agents and media 
         sigma = 0.5, # noise on individual agents
         sigmahat = 0., # noise on influencers
         sigmatilde = 0., # noise on media
         frictionI = 10., # friction for influencers
         frictionM = 100.,  #friction for media
-        controltarget = [1.25 1.25]
+        controltarget = [1.5 1.5]
     )
 
     q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed,controltarget)
     return q
 end
 
-function parameters2()
-    return parameters(eta=5.)
-end
-
-function parameters3() #for scenario noinf, the two clusters are well separated
-    return parameters(c=2., b=4.)
-end
-
-function parameters_control()
-    q = parameters(eta=1., #range 1-3 is best
-    b=4., 
-    controlspeed=0.2, 
-    controltarget = [1.5 1.5]) 
-    return q
-end
-
-function parameters_control2(;controlspeed=0.2)
-    q = parameters(eta=1., #range 1-3 is best
-    b=4., 
-    c=2.,
-    controlspeed=controlspeed,
-    controltarget = [1.5 1.5]) 
+function parameters_control(;controlspeed = 0.3)
+    q = parameters(eta=1.,controlspeed = controlspeed) 
     return q
 end
 
@@ -57,7 +37,7 @@ function ABMconstruct(;
         dt = 0.01,  # simulation stepsize 
         dx = 0.05,
         dy = dx,
-        domain =  2.15*[-1 1; -1 1]
+        domain =  2.2*[-1 1; -1 1]
     )
     X = [x for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
     Y = [y for x in domain[1,1]:dx:domain[1,2], y in domain[2,1]:dy:domain[2,2]]
@@ -71,7 +51,7 @@ function PDEconstruct(;
         # Define the constants for the PDE
         dx = 0.05, #0.05
         dy = dx,
-        domain = 2.15*[-1 1; -1 1]
+        domain = 2.2*[-1 1; -1 1]
     )
     N_x = Int(round((domain[1,2]-domain[1,1])/dx+1))
     N_y = Int(round((domain[2,2]-domain[2,1])/dy+1)) #so far only works if N_y = N_x
@@ -91,6 +71,14 @@ function PDEconstruct(;
     return p
 end
 
+
+function PDEconstructcoarse()
+    return PDEconstruct(;dx = 0.1, dy = 0.1,domain = 2.3*[-1 1; -1 1])
+end
+
+function PDEconstructmeso() #for final optimal control computations
+    return PDEconstruct(;dx = 44/600, dy = 44/600, domain = 2.2*[-1 1; -1 1])
+end
 
 function generate_K(grid_points)
     N, d = size(grid_points)
@@ -173,19 +161,18 @@ end
 
 
 
-function initialconditions((p,q))
+function uniform_initialconditions((p,q))
     (; N_x , N_y,dV, domain, dx) = p
     (; J, n) = q
     rho_0 = zeros(N_x, N_y, 2, 4)
     mid_y =Int(round(N_y/2))
     mid_x =Int(round(N_x/2))
-    start_x = Int((domain[1,2] - 2)/dx + 1)
+    start_x = Int(round((domain[1,2] - 2)/dx + 1))
     end_x = N_x - start_x +1
     rho_0[start_x:mid_x, start_x:mid_y,:,4] .= 1
-    rho_0[start_x:mid_x, mid_y+2:end_x,:,2] .= 1
-    rho_0[mid_x+2:end_x, start_x:mid_y,:,3] .= 1
-    rho_0[mid_x+2:end_x, mid_y+2:end_x,:,1] .= 1
-    rho_0[mid_x+1, mid_x+1,:,:] .= 0.5
+    rho_0[start_x:mid_x, mid_y+1:end_x,:,2] .= 1
+    rho_0[mid_x+1:end_x, start_x:mid_y,:,3] .= 1
+    rho_0[mid_x+1:end_x, mid_y+1:end_x,:,1] .= 1
 
     u0 = rho_0/(sum(rho_0)*dV)
     z2_0 = [1.,1.]
@@ -287,9 +274,13 @@ function constructinitial(scenario,(p,q))
         q=(;q..., J,b,eta)
         uzy0, counts, controlled = noinf_initialconditions((p,q))
     elseif scenario =="uniform"
-        uzy0, counts, controlled = initialconditions((p,q))
-    elseif scenario=="controlled"
-        uzy0, counts, controlled = inf_initialconditions((p,q))
+        uzy0, counts, controlled = uniform_initialconditions((p,q))
+    elseif scenario=="fixedtarget"
+        uzy0, counts, controlled = uniform_initialconditions((p,q))
+    elseif scenario=="localmax"
+        uzy0, counts, controlled = uniform_initialconditions((p,q))
+    elseif scenario=="optimalcontrol"
+        uzy0, counts, controlled = uniform_initialconditions((p,q))
     end
     return uzy0, counts, controlled,q
 end
@@ -356,8 +347,13 @@ function f(duzy,uzy,(p,q),t)
             if controlled[j] == 0
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
-            else #controll movement
-                dyj .= controlspeed* (controltarget' - yj)./ norm(controltarget' - yj)
+
+            elif controlled[j]==1 #controll movement
+                if norm(controltarget' - yj) >0
+                    dyj .= controlspeed* (controltarget' - yj)./ norm(controltarget' - yj)
+                else
+                    dyj .=0
+                end
             end
         end
     end
@@ -392,10 +388,8 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
     return sol, (p,q), counts
 end
 
-function solvecontrolled(tcontrol = 5., tmax=15.; alg=nothing, scenario="controlled", p = PDEconstruct(), q= parameters(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
-
-
-    uzy0, counts, controlled,q = constructinitial(scenario,(p,q))
+function solvefixedtarget(tcontrol = 5., tmax=10.1; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
+    uzy0, _, controlled,q = constructinitial(scenario,(p,q))
     q1 = (; q..., controlled)
 
     # Solve the ODE
@@ -403,24 +397,132 @@ function solvecontrolled(tcontrol = 5., tmax=15.; alg=nothing, scenario="control
 
     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
 
-
     #add new influencer
+    startlocation =  [0 0] #1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
     u,z,y = sol2uyz(sol1,tcontrol)
-    q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 1] ))
-    (;N_x, N_y, grid_points,N) = p
+    q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 1]))
+    (;N_x, N_y, grid_points,N, dV) = p
     J= q2.J
     u2 = zeros(N_x, N_y, 2, J)
     u2[:,:,:,1:J-1] = u
     y2 = zeros(2, J)
     y2[:,1:J-1] = y
-    y2[:,J] =  1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
+    #TODO maybe make constant speed such that starts and ends within 5. time steps
+    y2[:,J] = startlocation 
     uzy0 = ArrayPartition(u2,z,y2)
 
     # solve ODE with added influencer
     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),(p,q2))
     @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = rtol)
+    followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
+    return [sol1, sol2], [(p,q1), (p,q2)],  followersum
+end
 
-    return [sol1, sol2], [(p,q1), (p,q2)], counts
+function solvelocalmax(tcontrol = 5., tmax=10.1; alg=nothing, scenario="localmaximization", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
+    uzy0, _, controlled,q = constructinitial(scenario,(p,q))
+    q1 = (; q..., controlled)
+
+    # Solve the ODE
+    prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
+
+    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+
+    #add new influencer
+    startlocation =  [0 0] #1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
+    u,z,y = sol2uyz(sol1,tcontrol)
+    q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 2]))
+    (;N_x, N_y, grid_points,N, dV) = p
+    J= q2.J
+    u2 = zeros(N_x, N_y, 2, J)
+    u2[:,:,:,1:J-1] = u
+    y2 = zeros(2, J)
+    y2[:,1:J-1] = y
+    #TODO maybe make constant speed such that starts and ends within 5. time steps
+    y2[:,J] = startlocation 
+    uzy0 = ArrayPartition(u2,z,y2)
+
+    # solve ODE with added influencer
+    prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),(p,q2))
+    @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = rtol)
+    followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
+    return [sol1, sol2], [(p,q1), (p,q2)],  followersum
+end
+
+function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; alg=nothing, scenario="optimalcontrol", p = PDEconstructcoarse(), q= parameters_control(), savedt=0.1, atol = 1e-6, rtol = 1e-3)
+
+    #influencer grid points that can be reached at the end of each subinterval
+    Xi = [x for x in -ibound:idx:ibound, y in -ibound:idx:ibound]
+    Yi = [y for x in -ibound:idx:ibound, y in -ibound:idx:ibound]
+    Ngrid = size(Xi,1) #per dimension
+    followersum = zeros(Ngrid,Ngrid,Ngrid,Ngrid)
+
+    uzy0, _, controlled,q = constructinitial(scenario,(p,q))
+    qc = (; q..., controlled)
+
+    # Solve the ODE
+    prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,qc))
+
+    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+    # todo: maybe coarser savedt and compute follower integral on the fly
+
+    #add new influencer
+    u,z,y = sol2uyz(sol1,tequil)
+    qadded = merge(qc, (;J=qc.J+1,controlled = [qc.controlled..., 1] ))
+    (;N_x, N_y, grid_points,N, dV) = p
+    J= qadded.J
+    uadded = zeros(N_x, N_y, 2, J)
+    uadded[:,:,:,1:J-1] = u
+    yadded = zeros(2, J)
+    yadded[:,1:J-1] = y
+    # start location of new influencer
+    # todo: maybe place on symmetry axis and then save computations below due to symmetry
+    start = [0 0]
+    # 1/sum(uadded,dims=(1,2,4))[1,1,2,1] * reshape(sum(uadded, dims=4)[:,:,2,:],1,N)*grid_points #this should already be symmetric start point
+    yadded[:,J] = start
+    uzy0 = ArrayPartition(uadded,z,yadded)
+
+    # solve ODE with added influencer by looping over first endpoint of influencer at time = tcontrol
+    for i in 1:Ngrid; for j in 1:Ngrid
+        # only compute one side of the symmetry axis
+        if i >=j
+            #define controlspeed and target
+            target1 = [Xi[i,j] Yi[i,j]]
+            speed1 = norm(target1 - start)/tcontrol 
+            # add to parameter set
+            q1 = merge(qadded, (;controltarget = target1, controlspeed = speed1))
+
+            prob2 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
+            @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+            #final states
+            u1,z1,y1 = sol2uyz(sol2,tcontrol)
+            uzy1 = ArrayPartition(u1,z1,y1)
+            followersum[i,j,:,:] .= sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt   
+            
+            #loop over second endpoints starting from previous endpoint
+            #Threads.@threads 
+            for k in 1:Ngrid; for l in 1:Ngrid
+                #define controlspeed and target
+                target2 = [Xi[k,l] Yi[k,l]]
+                speed2 = norm(target2 - target1)/tcontrol 
+                # add to parameter set
+                q2 = merge(qadded, (;controltarget = target2, controlspeed = speed2))
+
+                prob3 = ODEProblem(f,uzy1,(0.0,tcontrol),(p,q2))
+                @time sol3 = DifferentialEquations.solve(prob3, alg,  saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+                #final states
+                followersum[i,j,k,l] += sum([sum(sol3(t).x[1][:,:,:,J]) for t in sol3.t])*dV*savedt              
+            end; end
+        end
+    end;end
+    #fill remaining symmetric values
+    for i in 1:Ngrid; for j in 1:Ngrid
+        # only compute one side of the symmetry axis
+        if i <j
+            followersum[i,j,:,:] = followersum[j,i,:,:]' #also the second targets have to be mirrored
+        end
+    end; end
+    @save string("data/optimalcontrol.jld2") p qadded followersum Xi Yi
+    return Xi, Yi, followersum
 end
 
 function solveplot(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
@@ -434,7 +536,7 @@ function solveplot(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q
     return sol, (p,q), counts
 end
 
-function vary_parameters_control(tcontrol = 5, tmax=40, savepoints = 4; alg=nothing, scenario="controlled", p = PDEconstruct(), bs=4.0, speeds=0.2, frictions=5:2.5:10., etas =1.:0.5:3. ,  savedt=1., atol = 1e-3, rtol = 1e-2)
+function vary_parameters_control(tcontrol = 5, tmax=40, savepoints = 4; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), bs=4.0, speeds=0.2, frictions=5:2.5:10., etas =1.:0.5:3. ,  savedt=1., atol = 1e-3, rtol = 1e-2)
     (; N_x, N_y) = p
     J=5
     zs = zeros(2, 2, savepoints,size(etas,1), size(frictions,1), size(speeds,1),size(bs,1))
@@ -545,9 +647,9 @@ end
 
 function plot_solution(rho, z, y, x_arr, y_arr; title="", labelz="", labely="", clim=(-Inf, Inf), scenario="4inf")
     subp = heatmap(x_arr,y_arr, rho', title = title, c=cmap, clims=clim)
-    scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[2],markersize=size_leaders, lab=labelz)
+    scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[2],markersize=size_leaders_pde, lab=labelz)
     if scenario!="noinf"
-        scatter!(subp, y[1,:], y[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
+        scatter!(subp, y[1,:], y[2,:], markercolor=colors_leaders[1],markersize=size_leaders_pde, lab=labely)
     end
     return subp
 end
@@ -669,10 +771,10 @@ function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf", labely="influence
 
     subp = heatmap(x_arr,y_arr, dens', title = title,ylabel=ylabel, c=cmap,clim=clim,legend=legend )
 
-    scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[2],markersize=size_leaders, lab = labelx)
+    scatter!(subp, z[1,:], z[2,:], markercolor=colors_leaders[2],markersize=size_leaders_pde, lab = labelx)
 
     if scenario!="noinf"
-        scatter!(subp, y[1,:], y[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
+        scatter!(subp, y[1,:], y[2,:], markercolor=colors_leaders[1],markersize=size_leaders_pde, lab=labely)
     end
 
     #subp # |> display
