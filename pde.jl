@@ -347,12 +347,24 @@ function f(duzy,uzy,(p,q),t)
             if controlled[j] == 0
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
+            
+            # elseif controlled[j]==2
+            #     #local maximization of followers
+            #     speed = 0.1
 
-            elif controlled[j]==1 #controll movement
+            #     grad_rate_x  = (1/dx)*(gamma(grid_points, u, y2 .+ [dx 0], eta, dV) - gamma(grid_points, u, y2, eta, dV))
+            #     grad_rate_y = (1/dy)*(gamma(grid_points, u, y2 .+ [0 dy], eta, dV) - gamma(grid_points, u, y2, eta, dV))
+                
+            #     gradC_x  = sum(grad_rate_x[:,:,:,1,j] .* (rhosum_j- u[:,:,:,j]))*dV
+            #     gradC_y  = sum(grad_rate_y[:,:,:,1,j] .* (rhosum_j- u[:,:,:,j]))*dV
+            #     dyj .= speed* [gradC_x gradC_y]
+            #     #todo check if it works, maybe add noise to escape local minima 
+
+            elseif controlled[j] == 1 #controll movement
                 if norm(controltarget' - yj) >0
                     dyj .= controlspeed* (controltarget' - yj)./ norm(controltarget' - yj)
                 else
-                    dyj .=0
+                    dyj .= 0
                 end
             end
         end
@@ -398,17 +410,19 @@ function solvefixedtarget(tcontrol = 5., tmax=10.1; alg=nothing, scenario="fixed
     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
 
     #add new influencer
-    startlocation =  [0 0] #1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
     u,z,y = sol2uyz(sol1,tcontrol)
     q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 1]))
     (;N_x, N_y, grid_points,N, dV) = p
     J= q2.J
     u2 = zeros(N_x, N_y, 2, J)
     u2[:,:,:,1:J-1] = u
+    startlocation =  1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points #[0 0]
+
     y2 = zeros(2, J)
     y2[:,1:J-1] = y
     #TODO maybe make constant speed such that starts and ends within 5. time steps
     y2[:,J] = startlocation 
+    
     uzy0 = ArrayPartition(u2,z,y2)
 
     # solve ODE with added influencer
@@ -418,37 +432,37 @@ function solvefixedtarget(tcontrol = 5., tmax=10.1; alg=nothing, scenario="fixed
     return [sol1, sol2], [(p,q1), (p,q2)],  followersum
 end
 
-function solvelocalmax(tcontrol = 5., tmax=10.1; alg=nothing, scenario="localmaximization", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
-    uzy0, _, controlled,q = constructinitial(scenario,(p,q))
-    q1 = (; q..., controlled)
+# function solvelocalmax(tcontrol = 5., tmax=10.1; alg=nothing, scenario="localmaximization", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
+#     uzy0, _, controlled,q = constructinitial(scenario,(p,q))
+#     q1 = (; q..., controlled)
 
-    # Solve the ODE
-    prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
+#     # Solve the ODE
+#     prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
 
-    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+#     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
 
-    #add new influencer
-    startlocation =  [0 0] #1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
-    u,z,y = sol2uyz(sol1,tcontrol)
-    q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 2]))
-    (;N_x, N_y, grid_points,N, dV) = p
-    J= q2.J
-    u2 = zeros(N_x, N_y, 2, J)
-    u2[:,:,:,1:J-1] = u
-    y2 = zeros(2, J)
-    y2[:,1:J-1] = y
-    #TODO maybe make constant speed such that starts and ends within 5. time steps
-    y2[:,J] = startlocation 
-    uzy0 = ArrayPartition(u2,z,y2)
+#     #add new influencer
+#     startlocation =  [0 0] #1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
+#     u,z,y = sol2uyz(sol1,tcontrol)
+#     q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 2]))
+#     (;N_x, N_y, grid_points,N, dV) = p
+#     J= q2.J
+#     u2 = zeros(N_x, N_y, 2, J)
+#     u2[:,:,:,1:J-1] = u
+#     y2 = zeros(2, J)
+#     y2[:,1:J-1] = y
+#     #TODO maybe make constant speed such that starts and ends within 5. time steps
+#     y2[:,J] = startlocation 
+#     uzy0 = ArrayPartition(u2,z,y2)
 
-    # solve ODE with added influencer
-    prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),(p,q2))
-    @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = rtol)
-    followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
-    return [sol1, sol2], [(p,q1), (p,q2)],  followersum
-end
+#     # solve ODE with added influencer
+#     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),(p,q2))
+#     @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = rtol)
+#     followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
+#     return [sol1, sol2], [(p,q1), (p,q2)],  followersum
+# end
 
-function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; alg=nothing, scenario="optimalcontrol", p = PDEconstructcoarse(), q= parameters_control(), savedt=0.1, atol = 1e-6, rtol = 1e-3)
+function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; alg=nothing, scenario="optimalcontrol", p = PDEconstructcoarse(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
 
     #influencer grid points that can be reached at the end of each subinterval
     Xi = [x for x in -ibound:idx:ibound, y in -ibound:idx:ibound]
@@ -476,8 +490,8 @@ function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; al
     yadded[:,1:J-1] = y
     # start location of new influencer
     # todo: maybe place on symmetry axis and then save computations below due to symmetry
-    start = [0 0]
-    # 1/sum(uadded,dims=(1,2,4))[1,1,2,1] * reshape(sum(uadded, dims=4)[:,:,2,:],1,N)*grid_points #this should already be symmetric start point
+    start =  1/sum(uadded,dims=(1,2,4))[1,1,2,1] * reshape(sum(uadded, dims=4)[:,:,2,:],1,N)*grid_points #this should already be symmetric start point
+    # [0 0]
     yadded[:,J] = start
     uzy0 = ArrayPartition(uadded,z,yadded)
 
@@ -523,6 +537,19 @@ function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; al
     end; end
     @save string("data/optimalcontrol.jld2") p qadded followersum Xi Yi
     return Xi, Yi, followersum
+end
+
+function plotfollowersum(followersum, Xi, Yi)
+    Ngrid = size(followersum,1)
+    #average out second targets
+    follower_av1 = dropdims(sum(followersum,dims=(3,4)) *1/(Ngrid^2), dims = (3,4))
+    #average out first targets
+    follower_av2 = dropdims(sum(followersum, dims=(1,2))*1/(Ngrid^2), dims = (1,2))
+    heatmap(Xi[:,1],Xi[:,1],follower_av1,c=cmap, title="Objective function, second target averaged out",xlabel="x-position of target",ylabel="y-position of target")
+    savefig("img/obj_secondaveragedout.png")
+    heatmap(Xi[:,1],Xi[:,1],follower_av2,c=cmap,title="Objective function, first target averaged out",xlabel="x-position of target",ylabel="y-position of target")
+    savefig("img/obj_firstaveragedout.png")
+    #TODO plot paths with obj function color on opinion domain space
 end
 
 function solveplot(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
