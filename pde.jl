@@ -400,50 +400,75 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
     return sol, (p,q), counts
 end
 
-function solvefixedtarget(tcontrol = 5., tmax=10.1; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
+function solvefixedtargets(tequil = 5., tmax=10.1, targets = [[1.5 1.5]]; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
+
+
+    #solve until tequil
     uzy0, _, controlled,q = constructinitial(scenario,(p,q))
     q1 = (; q..., controlled)
 
     # Solve the ODE
-    prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
+    prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
 
-    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tequil,save_start=true, abstol = atol, reltol = rtol)
+    sols = [sol1]
+    Ps =[(p,q1)]
+
+    n_targets = size(targets,1)
+    ttotalcontrol = tmax - tequil
+    tindcontrol = ttotalcontrol/n_targets
 
     #add new influencer
-    u,z,y = sol2uyz(sol1,tcontrol)
+    u,z,y = sol2uyz(sol1,tequil)
     q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 1]))
     (;N_x, N_y, grid_points,N, dV) = p
     J= q2.J
+
+    
     u2 = zeros(N_x, N_y, 2, J)
     u2[:,:,:,1:J-1] = u
     startlocation =  1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points #[0 0]
-
     y2 = zeros(2, J)
     y2[:,1:J-1] = y
     #TODO maybe make constant speed such that starts and ends within 5. time steps
     y2[:,J] = startlocation 
-    
     uzy0 = ArrayPartition(u2,z,y2)
+    followersum=0
 
-    # solve ODE with added influencer
-    prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),(p,q2))
-    @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = rtol)
-    followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
-    return [sol1, sol2], [(p,q1), (p,q2)],  followersum
+    for n in 1:n_targets
+        target = targets[n]
+        speed = norm(target - startlocation)/tindcontrol 
+        q3 = merge(q2, (;controltarget = target, controlspeed = speed))
+
+        # solve ODE with added influencer
+        prob2 = ODEProblem(f,uzy0,(0.0,tindcontrol ),(p,q3))
+        @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:tindcontrol ,save_start=true, abstol = atol, reltol = rtol)
+
+
+        followersum += sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
+        push!(sols,sol2)
+        push!(Ps, (p,q3))
+        #prepare next simulation
+        startlocation = target
+        uzy0 = sol2(tindcontrol)
+    end
+
+
+    return sols, Ps,  followersum
 end
 
-# function solvelocalmax(tcontrol = 5., tmax=10.1; alg=nothing, scenario="localmaximization", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
+# function solvelocalmax(tequil = 5., tmax=10.1; alg=nothing, scenario="localmaximization", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
 #     uzy0, _, controlled,q = constructinitial(scenario,(p,q))
 #     q1 = (; q..., controlled)
 
 #     # Solve the ODE
-#     prob1 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
+#     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
 
-#     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+#     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tequil,save_start=true, abstol = atol, reltol = rtol)
 
 #     #add new influencer
 #     startlocation =  [0 0] #1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
-#     u,z,y = sol2uyz(sol1,tcontrol)
+#     u,z,y = sol2uyz(sol1,tequil)
 #     q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 2]))
 #     (;N_x, N_y, grid_points,N, dV) = p
 #     J= q2.J
@@ -456,8 +481,8 @@ end
 #     uzy0 = ArrayPartition(u2,z,y2)
 
 #     # solve ODE with added influencer
-#     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tcontrol),(p,q2))
-#     @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tcontrol),save_start=true, abstol = atol, reltol = rtol)
+#     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tequil),(p,q2))
+#     @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tequil),save_start=true, abstol = atol, reltol = rtol)
 #     followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
 #     return [sol1, sol2], [(p,q1), (p,q2)],  followersum
 # end
@@ -491,7 +516,7 @@ function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; al
     # start location of new influencer
     # todo: maybe place on symmetry axis and then save computations below due to symmetry
     start =  1/sum(uadded,dims=(1,2,4))[1,1,2,1] * reshape(sum(uadded, dims=4)[:,:,2,:],1,N)*grid_points #this should already be symmetric start point
-    # [0 0]
+    # [0 0] #this adds another point symmetry
     yadded[:,J] = start
     uzy0 = ArrayPartition(uadded,z,yadded)
 
@@ -508,8 +533,7 @@ function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; al
             prob2 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
             @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
             #final states
-            u1,z1,y1 = sol2uyz(sol2,tcontrol)
-            uzy1 = ArrayPartition(u1,z1,y1)
+            uzy1 = sol2(tcontrol)
             followersum[i,j,:,:] .= sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt   
             
             #loop over second endpoints starting from previous endpoint
