@@ -348,17 +348,17 @@ function f(duzy,uzy,(p,q),t)
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
             
-            # elseif controlled[j]==2
-            #     #local maximization of followers
-            #     speed = 0.1
-
-            #     grad_rate_x  = (1/dx)*(gamma(grid_points, u, y2 .+ [dx 0], eta, dV) - gamma(grid_points, u, y2, eta, dV))
-            #     grad_rate_y = (1/dy)*(gamma(grid_points, u, y2 .+ [0 dy], eta, dV) - gamma(grid_points, u, y2, eta, dV))
+            elseif controlled[j]==2
+                #local maximization of followers
+                speed = 5
+                sigma_localmax = 0.5
+                grad_rate_x  = (1/dx)*(gamma(grid_points, u, y2 .+ [dx, 0], eta, dV) - gamma(grid_points, u, y2, eta, dV))
+                grad_rate_y = (1/dy)*(gamma(grid_points, u, y2 .+ [0, dy], eta, dV) - gamma(grid_points, u, y2, eta, dV))
                 
-            #     gradC_x  = sum(grad_rate_x[:,:,:,1,j] .* (rhosum_j- u[:,:,:,j]))*dV
-            #     gradC_y  = sum(grad_rate_y[:,:,:,1,j] .* (rhosum_j- u[:,:,:,j]))*dV
-            #     dyj .= speed* [gradC_x gradC_y]
-            #     #todo check if it works, maybe add noise to escape local minima 
+                gradC_x  = sum(grad_rate_x[:,:,:,1,j] .* (dropdims(rhosum_i,dims=4)- u[:,:,:,j]))*dV
+                gradC_y  = sum(grad_rate_y[:,:,:,1,j] .* (dropdims(rhosum_i,dims=4)- u[:,:,:,j]))*dV
+                dyj .= speed* [gradC_x, gradC_y] + sigma_localmax * randn(2)
+                #todo check if it works, maybe add noise to escape local minima 
 
             elseif controlled[j] == 1 #controll movement
                 if norm(controltarget' - yj) >0
@@ -401,7 +401,7 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
 end
 
 function solvefixedtargets(tequil = 5., tmax=10.1, targets = [[1.5 1.5]]; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
-
+    #todo: allow for choosing different start locationsgifsi
 
     #solve until tequil
     uzy0, _, controlled,q = constructinitial(scenario,(p,q))
@@ -427,7 +427,8 @@ function solvefixedtargets(tequil = 5., tmax=10.1, targets = [[1.5 1.5]]; alg=no
     
     u2 = zeros(N_x, N_y, 2, J)
     u2[:,:,:,1:J-1] = u
-    startlocation =  1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points #[0 0]
+    startlocation = y[:,1]' #position of influencer in right corner
+    # 1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points #[0 0]
     y2 = zeros(2, J)
     y2[:,1:J-1] = y
     #TODO maybe make constant speed such that starts and ends within 5. time steps
@@ -457,35 +458,35 @@ function solvefixedtargets(tequil = 5., tmax=10.1, targets = [[1.5 1.5]]; alg=no
     return sols, Ps,  followersum
 end
 
-# function solvelocalmax(tequil = 5., tmax=10.1; alg=nothing, scenario="localmaximization", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
-#     uzy0, _, controlled,q = constructinitial(scenario,(p,q))
-#     q1 = (; q..., controlled)
+function solvelocalmax(tequil = 5., tmax=10.; alg=nothing, scenario="localmax", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
+    uzy0, _, controlled,q = constructinitial(scenario,(p,q))
+    q1 = (; q..., controlled)
 
-#     # Solve the ODE
-#     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
+    # Solve the ODE
+    prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
 
-#     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tequil,save_start=true, abstol = atol, reltol = rtol)
+    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tequil,save_start=true, abstol = atol, reltol = rtol)
 
-#     #add new influencer
-#     startlocation =  [0 0] #1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
-#     u,z,y = sol2uyz(sol1,tequil)
-#     q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 2]))
-#     (;N_x, N_y, grid_points,N, dV) = p
-#     J= q2.J
-#     u2 = zeros(N_x, N_y, 2, J)
-#     u2[:,:,:,1:J-1] = u
-#     y2 = zeros(2, J)
-#     y2[:,1:J-1] = y
-#     #TODO maybe make constant speed such that starts and ends within 5. time steps
-#     y2[:,J] = startlocation 
-#     uzy0 = ArrayPartition(u2,z,y2)
+    #add new influencer
+    u,z,y = sol2uyz(sol1,tequil)
+    q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 2]))
+    (;N_x, N_y, grid_points,N, dV) = p
+    J= q2.J
+    u2 = zeros(N_x, N_y, 2, J)
+    u2[:,:,:,1:J-1] = u
+    y2 = zeros(2, J)
+    y2[:,1:J-1] = y
+    #TODO maybe make constant speed such that starts and ends within 5. time steps
+    startlocation =  [0 0] #1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
+    y2[:,J] = startlocation 
+    uzy0 = ArrayPartition(u2,z,y2)
 
-#     # solve ODE with added influencer
-#     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tequil),(p,q2))
-#     @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tequil),save_start=true, abstol = atol, reltol = rtol)
-#     followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
-#     return [sol1, sol2], [(p,q1), (p,q2)],  followersum
-# end
+    # solve ODE with added influencer
+    prob2 = ODEProblem(f,uzy0,(0.0,tmax-tequil),(p,q2))
+    @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tequil),save_start=true, abstol = atol, reltol = rtol)
+    followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
+    return [sol1, sol2], [(p,q1), (p,q2)],  followersum
+end
 
 function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; alg=nothing, scenario="optimalcontrol", p = PDEconstructcoarse(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
 
