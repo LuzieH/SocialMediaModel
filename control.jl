@@ -140,7 +140,7 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     #stopping criteria
     opt.maxtime = mtime
     opt.maxeval =  meval
-    for i in 1:eval
+    for i in 1:meval
         followers([zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...],[])
     end
     #(maxf,maxx,ret) = optimize(opt, [zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...])
