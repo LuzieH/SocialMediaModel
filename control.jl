@@ -106,6 +106,10 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     end
 
     function followers(x::Vector, grad::Vector)
+        @show Base.gc_bytes()  
+        GC.gc(true)
+        @show Base.gc_bytes()
+
         if length(grad)>0
         end
         targets = reshape(x[1:2*ntarg],(2,ntarg))  #reshape into correct input format
@@ -136,10 +140,14 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     #stopping criteria
     opt.maxtime = mtime
     opt.maxeval =  meval
-    (maxf,maxx,ret) = optimize(opt, [zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...])
+    for i in 1:eval
+        followers([zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...],[])
+    end
+    #(maxf,maxx,ret) = optimize(opt, [zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...])
     numevals = opt.numevals # the number of function evaluations
     println("got $maxf at $maxx after $numevals iterations (returned $ret)")
-    return maxf,maxx,ret, numevals, x_list,followersum_list,cornersum_list  
+    @save string("data/opt_strategy.jld2") maxf maxx ret numevals x_list followersum_list cornersum_list  
+    #return maxf,maxx,ret, numevals, x_list,followersum_list,cornersum_list  
 end 
 
 

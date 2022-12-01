@@ -6,3 +6,4 @@ ENV["MATLAB_ROOT"] = "/software/Matlab/current"
 includet("pde.jl")
 includet("abm.jl")
 includet("control.jl")
+includet("run.jl")
