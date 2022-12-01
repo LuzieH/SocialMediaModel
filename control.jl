@@ -22,7 +22,7 @@ function prep(tequil = 5.; p = PDEconstruct(), q= parameters_control(),scenario 
     (;N_x, N_y, grid_points,N, dV) = p
     J= q2.J
 
-    
+
     u2 = zeros(N_x, N_y, 2, J)
     u2[:,:,:,1:J-1] = u
     startlocation = y[:,1]' #position of influencer in right corner
@@ -30,7 +30,7 @@ function prep(tequil = 5.; p = PDEconstruct(), q= parameters_control(),scenario 
     y2 = zeros(2, J)
     y2[:,1:J-1] = y
     #TODO maybe make constant speed such that starts and ends within 5. time steps
-    y2[:,J] = startlocation 
+    y2[:,J] = startlocation
     uzy0 = ArrayPartition(u2,z,y2)
 
     return uzy0, startlocation, (p,q2)
@@ -77,25 +77,22 @@ vecof2vecs(in::Vector) = collect(eachrow(reshape(in, :, 2)))
 
 
 function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=parameters_optcont(), alg=:LN_COBYLA, mtime = 1000, meval=-1)
-        
+
+    iter = 0
     (; ntarg, speedbound, Tmax,tequil) = r
     uzy0, startlocation, (p,q) =  prep(tequil; p=p, q=q)
 
-    x_list = Any[] 
+    x_list = Any[]
     followersum_list = Any[]
     cornersum_list = Any[]
 
     function constrainttime(result::Vector, x::Vector, grad::Matrix)
-        if length(grad)>0
-        end
         for j in 1:ntarg-2
             result[j] =  x[2*ntarg+j]-x[2*ntarg+j+1] #has to be <=0
         end
     end
 
     function constraintspeed(result::Vector, x::Vector, grad::Matrix)
-        if length(grad)>0
-        end
         xy = reshape(x[1:2*ntarg], (2,ntarg))
         xs = [startlocation[1], xy[1,:]...]
         ys = [startlocation[2], xy[2,:]...]
@@ -106,19 +103,22 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     end
 
     function followers(x::Vector, grad::Vector)
-        @show Base.gc_bytes()  
-        GC.gc(true)
-        @show Base.gc_bytes()
+        iter += 1
+        println("iteration $iter")
 
-        if length(grad)>0
-        end
         targets = reshape(x[1:2*ntarg],(2,ntarg))  #reshape into correct input format
         ts = [0., x[2*ntarg+1:end]...,Tmax]
-        
+
         followersum, masscorner = solvefixedtargetsfast(ts, targets, startlocation, (p, q), uzy0)
         push!(x_list, x)
         push!(followersum_list, followersum)
         push!(cornersum_list, masscorner)
+
+        GC.gc()
+        GC.gc(true)
+        check_memory()
+        #GC.gc(true)
+        #GC.gc(true)
 
         return followersum
     end
@@ -129,10 +129,10 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     #lb ub are arrays of length ndim that bound the parameters from below and above
     lb = [ones(ntarg*2)*p.domain[1,1]..., zeros(ntarg-1)...]
     ub = [ones(ntarg*2)*p.domain[1,2]..., Tmax*ones(ntarg-1)...]
-    opt.lower_bounds = lb::Union{AbstractVector,Real} 
+    opt.lower_bounds = lb::Union{AbstractVector,Real}
     opt.upper_bounds = ub::Union{AbstractVector,Real}
 
-    
+
     opt.max_objective = followers
     inequality_constraint!(opt, constrainttime, 1e-8*ones(ntarg-2)) #constraint time points to be ordered
     inequality_constraint!(opt, constraintspeed,  1e-8*ones(ntarg)) #constrain speed
@@ -140,16 +140,27 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     #stopping criteria
     opt.maxtime = mtime
     opt.maxeval =  meval
-    for i in 1:meval
-        followers([zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...],[])
-    end
-    #(maxf,maxx,ret) = optimize(opt, [zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...])
+    #for i in 1:meval
+    #    followers([zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...],[])
+    #end
+    (maxf,maxx,ret) = optimize(opt, [zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...])
     numevals = opt.numevals # the number of function evaluations
     println("got $maxf at $maxx after $numevals iterations (returned $ret)")
-    @save string("data/opt_strategy.jld2") maxf maxx ret numevals x_list followersum_list cornersum_list  
-    #return maxf,maxx,ret, numevals, x_list,followersum_list,cornersum_list  
-end 
+    @save string("data/opt_strategy.jld2") maxf maxx ret numevals x_list followersum_list cornersum_list
+    #return maxf,maxx,ret, numevals, x_list,followersum_list,cornersum_list
+end
 
 
-
-
+function check_memory(limit=32, verbose = true)
+    gb = open("/proc/$(getpid())/statm") do io
+        parse(Int, split(read(io, String))[1]) * 4096 / 1024 / 1024 / 1024  # in GB
+    end
+    if verbose
+        run(`ps -p $(getpid()) -o pid,comm,vsize,rss,size`);
+        @show gb
+    end
+    if gb > limit # GB
+        @warn "Exceeded memory bounds"
+        throw(ErrorException("Exceeded memory bounds"))
+    end
+end
