@@ -40,8 +40,8 @@ end
 function solvefixedtargetsfast(ts, targets, startlocation, (p, q), uzy0; savedt=0.05, atol = 1e-6, rtol = 1e-3)
     bound = Int(round((p.N_x)*0.7))
     n_targets = size(targets,2)
-    followersum=0
-    masscorner =0
+    followersum= 0.
+    masscorner = 0.
     dV=p.dV
     J = q.J
 
@@ -63,17 +63,10 @@ function solvefixedtargetsfast(ts, targets, startlocation, (p, q), uzy0; savedt=
         uzy0 = sol(Dt)
     end
 
-
-
     return followersum, masscorner
 end
 
 vecof2vecs(in::Vector) = collect(eachrow(reshape(in, :, 2)))
-
-
-
-
-
 
 
 function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=parameters_optcont(), alg=:LN_COBYLA, mtime = 1000, meval=-1)
@@ -82,9 +75,9 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     (; ntarg, speedbound, Tmax,tequil) = r
     uzy0, startlocation, (p,q) =  prep(tequil; p=p, q=q)
 
-    x_list = Any[]
-    followersum_list = Any[]
-    cornersum_list = Any[]
+    x_list = Vector{Float64}[]
+    followersum_list = Float64[]
+    cornersum_list = Float64[]
 
     function constrainttime(result::Vector, x::Vector, grad::Matrix)
         for j in 1:ntarg-2
@@ -140,14 +133,12 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     #stopping criteria
     opt.maxtime = mtime
     opt.maxeval =  meval
-    #for i in 1:meval
-    #    followers([zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...],[])
-    #end
-    (maxf,maxx,ret) = optimize(opt, [zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...])
+    x0 = [zeros(2*ntarg)..., collect(1:ntarg-1)*(Tmax/(ntarg))...]
+    (maxf,maxx,ret) = optimize(opt, x0)
     numevals = opt.numevals # the number of function evaluations
     println("got $maxf at $maxx after $numevals iterations (returned $ret)")
     @save string("data/opt_strategy.jld2") maxf maxx ret numevals x_list followersum_list cornersum_list
-    #return maxf,maxx,ret, numevals, x_list,followersum_list,cornersum_list
+    return maxf,maxx,ret, numevals, x_list,followersum_list,cornersum_list
 end
 
 
