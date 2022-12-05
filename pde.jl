@@ -395,13 +395,14 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
 
     # Solve the ODE
     prob = ODEProblem(f,uzy0,(0.0,tmax),(p,q))
-    @time sol = DifferentialEquations.solve(prob, alg, save_start=true)
+    @time sol = DifferentialEquations.solve(prob, alg, alg_hints = [:stiff], save_start=true)
 
     return sol, (p,q), counts
 end
 
-function solvefixedtargets(tequil = 5., tmax=10.1, targets = [[1.5 1.5]]; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
-    #todo: allow for choosing different start locationsgifsi
+function solvefixedtargets(tequil, ts, targets; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), q= parameters_control(), savedt=0.05,dtmin=0.001, atol = 1e-6, rtol = 1e-3)
+    #todo: allow for choosing different start locations
+    n_targets = size(targets,2)
 
     #solve until tequil
     uzy0, _, controlled,q = constructinitial(scenario,(p,q))
@@ -411,17 +412,13 @@ function solvefixedtargets(tequil = 5., tmax=10.1, targets = [[1.5 1.5]]; alg=no
     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
 
     @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tequil,save_start=true, abstol = atol, reltol = rtol)
-    sols = [sol1]
-    Ps =[(p,q1)]
-
-    n_targets = size(targets,1)
-    ttotalcontrol = tmax - tequil
-    tindcontrol = ttotalcontrol/n_targets
+    sols = Any[sol1]
+    Ps =Any[(p,q1)]
 
     #add new influencer
     u,z,y = sol2uyz(sol1,tequil)
     q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 1]))
-    (;N_x, N_y, grid_points,N, dV) = p
+    (;N_x, N_y, dV) = p
     J= q2.J
 
     
@@ -437,13 +434,21 @@ function solvefixedtargets(tequil = 5., tmax=10.1, targets = [[1.5 1.5]]; alg=no
     followersum=0
 
     for n in 1:n_targets
-        target = targets[n]
-        speed = norm(target - startlocation)/tindcontrol 
+        target = targets[:,n]'
+        Dt = ts[n+1]-ts[n]
+        if Dt>0
+            speed = norm(target - startlocation)/Dt
+        else
+            speed=0
+        end
+        println( "dt $Dt")
+        println("speed $speed")
+        println("target $target")
         q3 = merge(q2, (;controltarget = target, controlspeed = speed))
 
         # solve ODE with added influencer
-        prob2 = ODEProblem(f,uzy0,(0.0,tindcontrol ),(p,q3))
-        @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:tindcontrol ,save_start=true, abstol = atol, reltol = rtol)
+        prob2 = ODEProblem(f,uzy0,(0.0,Dt ),(p,q3))
+        @time sol2 = DifferentialEquations.solve(prob2, alg, dtmin = dtmin, force_dtmin = true,   saveat = 0:savedt:Dt ,save_start=true, abstol = atol, reltol = rtol)
 
 
         followersum += sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
@@ -451,7 +456,7 @@ function solvefixedtargets(tequil = 5., tmax=10.1, targets = [[1.5 1.5]]; alg=no
         push!(Ps, (p,q3))
         #prepare next simulation
         startlocation = target
-        uzy0 = sol2(tindcontrol)
+        uzy0 = sol2(Dt)
     end
 
 
@@ -465,7 +470,7 @@ function solvelocalmax(tequil = 5., tmax=10.; alg=nothing, scenario="localmax", 
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
 
-    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tequil,save_start=true, abstol = atol, reltol = rtol)
+    @time sol1 = DifferentialEquations.solve(prob1, alg, alg_hints = [:stiff], saveat = 0:savedt:tequil,save_start=true, abstol = atol, reltol = rtol)
 
     #add new influencer
     u,z,y = sol2uyz(sol1,tequil)
@@ -483,7 +488,7 @@ function solvelocalmax(tequil = 5., tmax=10.; alg=nothing, scenario="localmax", 
 
     # solve ODE with added influencer
     prob2 = ODEProblem(f,uzy0,(0.0,tmax-tequil),(p,q2))
-    @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:(tmax-tequil),save_start=true, abstol = atol, reltol = rtol)
+    @time sol2 = DifferentialEquations.solve(prob2, alg, alg_hints = [:stiff],  saveat = 0:savedt:(tmax-tequil),save_start=true, abstol = atol, reltol = rtol)
     followersum = sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt 
     return [sol1, sol2], [(p,q1), (p,q2)],  followersum
 end
@@ -502,7 +507,7 @@ function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; al
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,qc))
 
-    @time sol1 = DifferentialEquations.solve(prob1, alg, saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+    @time sol1 = DifferentialEquations.solve(prob1, alg, alg_hints = [:stiff], saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
     # todo: maybe coarser savedt and compute follower integral on the fly
 
     #add new influencer
@@ -532,7 +537,7 @@ function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; al
             q1 = merge(qadded, (;controltarget = target1, controlspeed = speed1))
 
             prob2 = ODEProblem(f,uzy0,(0.0,tcontrol),(p,q1))
-            @time sol2 = DifferentialEquations.solve(prob2, alg,  saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
+            @time sol2 = DifferentialEquations.solve(prob2, alg, alg_hints = [:stiff],  saveat = 0:savedt:tcontrol,save_start=true, abstol = atol, reltol = rtol)
             #final states
             uzy1 = sol2(tcontrol)
             followersum[i,j,:,:] .= sum([sum(sol2(t).x[1][:,:,:,J]) for t in sol2.t])*dV*savedt   

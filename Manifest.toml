@@ -2,7 +2,13 @@
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "9f070f69e8206e7efc0df0444e7863e79f3250f8"
+project_hash = "e84b3dd6f727ee8313ab00b115e90e5d2939b845"
+
+[[deps.AbbreviatedStackTraces]]
+deps = ["Distributed", "REPL"]
+git-tree-sha1 = "8b61a51319d97f8ecc7a8d479e7c62b342cc8bb7"
+uuid = "ac637c84-cc71-43bf-9c33-c1b4316be3d4"
+version = "0.1.5"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
