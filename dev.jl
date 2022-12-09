@@ -1,7 +1,10 @@
 using Revise
+using LinearAlgebra
 
-ENV["MATLABPATH"]="/home/htc/bzfhelfm/.julia/packages/Mex/5WarT/mexjulia"
-ENV["MATLAB_ROOT"] = "/software/Matlab/current"
+LinearAlgebra.BLAS.set_num_threads(parse(Int,get(ENV, "SLURM_JOB_CPUS_PER_NODE", "20")))
+
+
+print("Running on ", string(Threads.nthreads())," threads with ",string(LinearAlgebra.BLAS.get_num_threads())," BLAS")
 
 includet("pde.jl")
 includet("abm.jl")

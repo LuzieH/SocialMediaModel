@@ -5,6 +5,9 @@ using JLD2
 using Distances
 pyplot()
 
+int_decay = 1. #describes how exponential function of agent-agent interaction decays
+order_decay = 3. 
+# leads to stability issues in coarse pde solution if int_decay too Large  (larger than 3)
 
 function parameters(;
         J=4,  #number of influencers
@@ -24,6 +27,11 @@ function parameters(;
     )
 
     q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed,controltarget)
+    return q
+end
+
+function parameters_new(;a=2)
+    q= parameters(;a=a)
     return q
 end
 
@@ -89,7 +97,7 @@ function generate_K(grid_points)
     @inbounds for j in 1:N, i in 1:N
         x = grid_points[j,1] - grid_points[i,1] #first component of x' -x
         y = grid_points[j,2] - grid_points[i,2] #2nd component of x' -x
-        w[i,j] = ww = exp(-sqrt(x^2 + y^2))
+        w[i,j] = ww = exp(-int_decay*sqrt(x^2 + y^2))
         k[i,j, 1] = ww * x
         k[i,j, 2] = ww * y
     end
@@ -288,8 +296,9 @@ end
 
 function f(duzy,uzy,(p,q),t)
     yield()
-    (; grid_points, N_x, N_y,N, K_matrix, W_matrix, dx,dy, dV, C,  M) = p
     (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled, controlspeed,controltarget) = q
+    (; grid_points, N_x, N_y,N, K_matrix, W_matrix, dx,dy, dV, C,  M) = p
+    
     D = sigma^2 * 0.5
     u, z, y2 = uzy.x
     du, dz, dy2 = duzy.x
@@ -398,6 +407,40 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
     @time sol = DifferentialEquations.solve(prob, alg, alg_hints = [:stiff], save_start=true)
 
     return sol, (p,q), counts
+end
+
+function orderparameters(sol, (p,q))
+    ord_infs = Any[]
+    ord_meds = Any[]
+    ts = sol.t
+    N = p.N
+    grid_points = p.grid_points
+    for t in ts
+        u,z,y = sol2uyz(sol, t)
+        ord_inf =0.
+        ord_med =0.
+
+        for l in 1:q.J
+            rho = vec(dropdims(sum(u[:,:,:,l],dims=3),dims = (3)))
+            for j in 1:N
+                xc = grid_points[j,1] - y[1,l] #first component of x' -z_l
+                yc = grid_points[j,2] - y[2,l]  #2nd component of x' -z_l
+                ord_inf += rho[j]*exp(-order_decay*sqrt(xc^2 + yc^2)) *p.dV
+            end
+        end
+        for m in 1:2
+            rho = vec(dropdims(sum(u[:,:,m,:],dims=3),dims = (3)))
+            @inbounds for j in 1:N
+                xc = grid_points[j,1] - z[1,m] #first component of x' -z_l
+                yc = grid_points[j,2] - z[2,m]  #2nd component of x' -z_l
+                ord_med += rho[j]*exp(-order_decay*sqrt(xc^2 + yc^2)) *p.dV
+            end
+        end
+
+        push!(ord_meds,ord_med)
+        push!(ord_infs, ord_inf)
+    end
+    return ord_infs, ord_meds, ts
 end
 
 function solvefixedtargets(tequil, ts, targets; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), q= parameters_control(), savedt=0.05,dtmin=0.001, atol = 1e-6, rtol = 1e-3)

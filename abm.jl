@@ -107,6 +107,7 @@ end
 function attraction(x, Net)
     n = size(Net, 1)
     force = zeros(n,2)
+    orderparameter=0.
     for j in 1:n
         L=findall(x->x==1, Net[j,:])
         if isempty(L)
@@ -116,36 +117,43 @@ function attraction(x, Net)
             w_sum=0
             for i in 1:length(L)
                 d = x[L[i],:]-x[j,:]
-                w = exp(-sqrt(d[1]^2 +d[2]^2))
+                w = exp(-int_decay*sqrt(d[1]^2 +d[2]^2))
                 fi = fi + w*d'
                 w_sum = w_sum+w
             end
             force[j,:] = fi/w_sum
         end
+        orderparameter+= w_sum
     
     end
-    return force
+    orderparameter = 1/n^2 * orderparameter
+    return force, orderparameter
 end
 
 function influence(x,media,inf,fol,state,(p,q))
     (; n, b, c, J) = q
     force1 =zeros(size(x))
     force2 =zeros(size(x))
+    ord_med = 0.
+    ord_inf = 0. 
     for j in 1:n
         if state[j]==1
             force1[j,:] = media[2,:]-x[j,:]
+            ord_med += exp(-order_decay*norm(force1[j,:]))
         else  
             force1[j,:] = media[1,:]-x[j,:]
+            ord_med += exp(-order_decay*norm(force1[j,:]))
         end
 
         for k in 1:J
             if fol[j,k]==1
                 force2[j,:]=inf[k,:] -x[j,:]
+                ord_inf += exp(-order_decay*norm(force2[j,:]))
             end
         end
     end
     force = c*force1 + b*force2
-    return force
+    return force, ord_med/n, ord_inf/n
 end
 
 function changeinfluencer(state,x,fol,inf,(p,q))
@@ -201,7 +209,7 @@ end
 
 function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf")
     (; dt, domain) = p
-    (;n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, frictionM ) =q
+    (;n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, frictionM) =q
 
     if scenario=="4inf"
         x, media, inf, fol, state,Net,counts  = ABMinfinitialconditions((p,q))
@@ -219,11 +227,18 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf"
     infs = [inf]
     meds = [media]
     xinfs = [fol * collect(1:J)]
-
+    orderparameters = Any[]
+    ord_infs = Any[]
+    ord_meds = Any[]
     for k in 2:NT+1
         xold = x
         # opinions change due to opinions of friends, influencers and media
-        force = a * attraction(xold,Net) + influence(xold,media,inf,fol,state,(p,q))
+        attforce, orderparameter = attraction(xold,Net)
+        leader_force, ord_med, ord_inf = influence(xold,media,inf,fol,state,(p,q))
+        push!(orderparameters, orderparameter)
+        push!(ord_infs, ord_inf)
+        push!(ord_meds, ord_med)
+        force = a * attforce + leader_force
         x = xold + dt*force + sqrt(dt*sigma)*randn(n,2); 
         # dont allow agents to escape domain
         ind1 = findall(x->x>domain[1,2],x)
@@ -261,10 +276,16 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf"
         meds = push!(meds, copy(media))
         xinfs = push!(xinfs, copy(fol * collect(1:J)))
     end
-
-    return xs, xinfs, infs, meds, state, (p,q), counts
+    attforce, orderparameter = attraction(x,Net)
+    leader_force, ord_med, ord_inf = influence(x,media,inf,fol,state,(p,q))
+    push!(orderparameters, orderparameter)
+    push!(ord_infs, ord_inf)
+    push!(ord_meds, ord_med)
+    return xs, xinfs, infs, meds, state, (p,q), counts,orderparameters, ord_infs, ord_meds
 
 end
+
+
  
 function sumgaussian(x, centers;sigma=0.1)
     output = 0
@@ -316,10 +337,10 @@ function kdeplot(centers, inf, media, state, xinf, (p,q); title = "",labelx1 = "
 end
 
 function ABMsolveplot(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf")
-    @time xs, xinfs, infs, meds, state, (p,q), counts = ABMsolve(NT;  p=p, q=q, scenario=scenario)
+    @time xs, xinfs, infs, meds, state, (p,q), counts,orderparameters, ord_infs, ord_meds = ABMsolve(NT;  p=p, q=q, scenario=scenario)
     (;dt) = p
     ABMplotarray(xs[end], xinfs[end],state,  infs[end], meds[end],  (p,q), dt*(NT-1), scenario=scenario)
-    return xs, xinfs, infs, meds, state, (p,q), counts
+    return xs, xinfs, infs, meds, state, (p,q), counts,orderparameters, ord_infs, ord_meds
 end
 
 function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenario="4inf")
@@ -495,7 +516,7 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, scenario="4inf", p = ABM
     av_counts = zeros(J,2)
     states = [-1 1]
     Threads.@threads for k=1:N
-        xs, xinfs, infs, meds, state, _, counts = ABMsolve(NT;  p=p, q=q, scenario=scenario)
+        xs, xinfs, infs, meds, state, _, counts,orderparameters, ord_infs, ord_meds = ABMsolve(NT;  p=p, q=q, scenario=scenario)
         av_counts = av_counts +  counts*(1/N)
 
         for m in 1:savepoints
