@@ -6,7 +6,7 @@ using Distances
 pyplot()
 
 int_decay = 1. #describes how exponential function of agent-agent interaction decays
-order_decay = 3. 
+order_decay = 1. 
 # leads to stability issues in coarse pde solution if int_decay too Large  (larger than 3)
 
 function parameters(;
@@ -14,7 +14,6 @@ function parameters(;
         n_media = 2, #number of media
         n = 250, #number of agents 
         eta = 15.0, #rate constant for changing influencer  
-        controlspeed = 0.3, 
         a = 1., #interaction strength between agents
         b = 4., # interaction strength between agents and influencers
         c = 2., # interaction strength between agents and media 
@@ -23,20 +22,18 @@ function parameters(;
         sigmatilde = 0., # noise on media
         frictionI = 10., # friction for influencers
         frictionM = 100.,  #friction for media
-        controltarget = [1.5 1.5]
+        controlspeed = 0.3, 
+        controltarget = [1.5 1.5],
+        controlspeed2 = 0.3, 
+        controltarget2 = [1.5 1.5]
     )
 
-    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed,controltarget)
-    return q
-end
-
-function parameters_new(;a=2)
-    q= parameters(;a=a)
+    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed,controltarget, controlspeed2,controltarget2)
     return q
 end
 
 function parameters_control(;controlspeed = 0.3)
-    q = parameters(eta=1.,controlspeed = controlspeed) 
+    q = parameters(;eta=1.,controlspeed = controlspeed) 
     return q
 end
 
@@ -194,7 +191,8 @@ function uniform_initialconditions((p,q))
     y0 = [y1_0  y2_0 y3_0 y4_0]
     counts = n/(2*J)*ones(J,2) # proportion of agents that follow each influencer
     controlled = zeros(J)
-    return ArrayPartition(u0,z0,y0), counts, controlled
+    controlled_med = zeros(2)
+    return ArrayPartition(u0,z0,y0), counts, controlled, controlled_med
 end
 
 #2D gaussian that integrates to 1 and centered at center
@@ -239,7 +237,8 @@ function inf_initialconditions((p,q))
     z0 = [z1_0  z2_0]
     y0= y0./dropdims(sum(counts, dims=2), dims=2)'
     controlled = zeros(J)
-    return ArrayPartition(u0,z0,y0), counts, controlled
+    controlled_med = zeros(2)
+    return ArrayPartition(u0,z0,y0), counts, controlled,controlled_med
 end
 
 function noinf_initialconditions((p,q))
@@ -269,34 +268,35 @@ function noinf_initialconditions((p,q))
     z1_0 = [-1.,-1.]
     z0 = [z1_0  z2_0]
     controlled = zeros(1)
-    return ArrayPartition(u0,z0,y0), counts, controlled
+    controlled_med = zeros(2)
+    return ArrayPartition(u0,z0,y0), counts, controlled,controlled_med
 end
 
 function constructinitial(scenario,(p,q))
     if scenario=="4inf"
-        uzy0, counts, controlled = inf_initialconditions((p,q))
+        uzy0, counts, controlled,controlled_med = inf_initialconditions((p,q))
     elseif scenario=="noinf"
         J=1
         b=0
         eta=0
         q=(;q..., J,b,eta)
-        uzy0, counts, controlled = noinf_initialconditions((p,q))
+        uzy0, counts, controlled,controlled_med = noinf_initialconditions((p,q))
     elseif scenario =="uniform"
-        uzy0, counts, controlled = uniform_initialconditions((p,q))
+        uzy0, counts, controlled,controlled_med = uniform_initialconditions((p,q))
     elseif scenario=="fixedtarget"
-        uzy0, counts, controlled = uniform_initialconditions((p,q))
+        uzy0, counts, controlled,controlled_med = uniform_initialconditions((p,q))
     elseif scenario=="localmax"
-        uzy0, counts, controlled = uniform_initialconditions((p,q))
+        uzy0, counts, controlled,controlled_med = uniform_initialconditions((p,q))
     elseif scenario=="optimalcontrol"
-        uzy0, counts, controlled = uniform_initialconditions((p,q))
+        uzy0, counts, controlled,controlled_med = uniform_initialconditions((p,q))
     end
-    return uzy0, counts, controlled,q
+    return uzy0, counts, controlled,controlled_med,q
 end
 
 
 function f(duzy,uzy,(p,q),t)
     yield()
-    (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled, controlspeed,controltarget) = q
+    (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled, controlled_med,controlspeed,controltarget, controlspeed2,controltarget2) = q
     (; grid_points, N_x, N_y,N, K_matrix, W_matrix, dx,dy, dV, C,  M) = p
     
     D = sigma^2 * 0.5
@@ -350,8 +350,6 @@ function f(duzy,uzy,(p,q),t)
 
             drho .=  dif .- dive .+ reac
 
-            mean_rhoi = 1/m_i[i] * dV*reshape(rhosum_i[:,:,i,:],1,N)*grid_points
-            dzi .= 1/(frictionM) * (mean_rhoi' - zi)
 
             if controlled[j] == 0
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
@@ -375,6 +373,22 @@ function f(duzy,uzy,(p,q),t)
                 else
                     dyj .= 0
                 end
+            elseif controlled[j] == 3 #second controlled influencer
+                if norm(controltarget2' - yj) >0
+                    dyj .= controlspeed2* (controltarget2' - yj)./ norm(controltarget2' - yj)
+                else
+                    dyj .= 0
+                end
+            end
+            if controlled_med[i] ==1 
+                if norm(controltarget' - zi) >0
+                    dzi .= controlspeed* (controltarget' - zi)./ norm(controltarget' - zi)
+                else
+                    dzi .= 0
+                end
+            else
+                mean_rhoi = 1/m_i[i] * dV*reshape(rhosum_i[:,:,i,:],1,N)*grid_points
+                dzi .= 1/(frictionM) * (mean_rhoi' - zi)
             end
         end
     end
@@ -399,8 +413,8 @@ end
 
 function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
 
-    uzy0, counts, controlled,q = constructinitial(scenario,(p,q))
-    q = (; q..., controlled)
+    uzy0, counts, controlled,controlled_med,q = constructinitial(scenario,(p,q))
+    q = (; q..., controlled,controlled_med)
 
     # Solve the ODE
     prob = ODEProblem(f,uzy0,(0.0,tmax),(p,q))
@@ -409,10 +423,9 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
     return sol, (p,q), counts
 end
 
-function orderparameters(sol, (p,q))
+function computeorderparameters(sol, (p,q); ts = sol.t)
     ord_infs = Any[]
     ord_meds = Any[]
-    ts = sol.t
     N = p.N
     grid_points = p.grid_points
     for t in ts
@@ -440,7 +453,7 @@ function orderparameters(sol, (p,q))
         push!(ord_meds,ord_med)
         push!(ord_infs, ord_inf)
     end
-    return ord_infs, ord_meds, ts
+    return ord_infs, ord_meds
 end
 
 function solvefixedtargets(tequil, ts, targets; alg=nothing, scenario="fixedtarget", p = PDEconstruct(), q= parameters_control(), savedt=0.05,dtmin=0.001, atol = 1e-6, rtol = 1e-3)
@@ -448,8 +461,8 @@ function solvefixedtargets(tequil, ts, targets; alg=nothing, scenario="fixedtarg
     n_targets = size(targets,2)
 
     #solve until tequil
-    uzy0, _, controlled,q = constructinitial(scenario,(p,q))
-    q1 = (; q..., controlled)
+    uzy0, _, controlled,controlled_med,q = constructinitial(scenario,(p,q))
+    q1 = (; q..., controlled,controlled_med)
 
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
@@ -507,8 +520,8 @@ function solvefixedtargets(tequil, ts, targets; alg=nothing, scenario="fixedtarg
 end
 
 function solvelocalmax(tequil = 5., tmax=10.; alg=nothing, scenario="localmax", p = PDEconstruct(), q= parameters_control(), savedt=0.05, atol = 1e-6, rtol = 1e-3)
-    uzy0, _, controlled,q = constructinitial(scenario,(p,q))
-    q1 = (; q..., controlled)
+    uzy0, _, controlled,controlled_med,q = constructinitial(scenario,(p,q))
+    q1 = (; q..., controlled,controlled_med)
 
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
@@ -544,8 +557,8 @@ function controlsearch(tequil = 5., tcontrol = 2.5, idx = 0.75, ibound = 1.5; al
     Ngrid = size(Xi,1) #per dimension
     followersum = zeros(Ngrid,Ngrid,Ngrid,Ngrid)
 
-    uzy0, _, controlled,q = constructinitial(scenario,(p,q))
-    qc = (; q..., controlled)
+    uzy0, _, controlled,controlled_med,q = constructinitial(scenario,(p,q))
+    qc = (; q..., controlled,controlled_med)
 
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,qc))
@@ -620,8 +633,10 @@ function plotfollowersum(followersum, Xi, Yi)
     follower_av2 = dropdims(sum(followersum, dims=(1,2))*1/(Ngrid^2), dims = (1,2))
     heatmap(Xi[:,1],Xi[:,1],follower_av1,c=cmap, title="Objective function, second target averaged out",xlabel="x-position of target",ylabel="y-position of target")
     savefig("img/obj_secondaveragedout.png")
+    savefig("img/obj_secondaveragedout.pdf")
     heatmap(Xi[:,1],Xi[:,1],follower_av2,c=cmap,title="Objective function, first target averaged out",xlabel="x-position of target",ylabel="y-position of target")
     savefig("img/obj_firstaveragedout.png")
+    savefig("img/obj_firstaveragedout.pdf")
     #TODO plot paths with obj function color on opinion domain space
 end
 
@@ -694,9 +709,21 @@ function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4i
     us = zeros(N_x, N_y, 2, J, savepoints,  N)
     savetimes = LinRange(0, tmax, savepoints)
     av_counts = zeros(J,2)
+    ts = LinRange(0,tmax,100)
+    ord_infs_mean = zeros(size(ts))
+    ord_meds_mean =  zeros(size(ts))
+    ord_infs_sqrmean = zeros(size(ts))
+    ord_meds_sqrmean =  zeros(size(ts))
     #Threads.@threads 
     for i=1:N
         sol, _ , counts= solve(tmax; alg=alg, scenario=scenario, p=p, q=q)
+        ord_infs, ord_meds = computeorderparameters(sol, (p,q); ts = ts)
+
+        ord_infs_mean += ord_infs*(1/N)
+        ord_meds_mean +=  ord_meds*(1/N)    
+        ord_infs_sqrmean += ord_infs.^2*(1/N)
+        ord_meds_sqrmean +=  ord_meds.^2*(1/N)      
+
         av_counts = av_counts +  counts*(1/N)
         for j in 1:savepoints
             u,z,y = sol2uyz(sol, savetimes[j])
@@ -707,8 +734,8 @@ function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4i
 
     end
 
-    @save string("data/pde_ensemble_",scenario,".jld2") us zs ys
-    return us, zs, ys, (p,q), av_counts
+    @save string("data/pde_ensemble_",scenario,".jld2") us zs ys ord_infs_mean ord_meds_mean ord_infs_sqrmean ord_meds_sqrmean
+    return us, zs, ys, (p,q), av_counts, ord_infs_mean, ord_meds_mean, ord_infs_sqrmean, ord_meds_sqrmean
 end
 
 function plotensemble(us, zs, ys, (p,q), tmax; title1 = "img/pde_ensemble", title2 = "img/pde_ensemble_influencer_", clmax = 0.5, scenario="4inf")
@@ -722,7 +749,7 @@ function plotensemble(us, zs, ys, (p,q), tmax; title1 = "img/pde_ensemble", titl
     for k in 1:savepoints
         plotarray(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], (p,q), savetimes[k]; save=false, clmax = clmax, scenario = scenario)
         savefig(string(title1,string(k),scenario,".png"))
-
+        savefig(string(title1,string(k),scenario,".pdf"))
         if scenario=="4inf"
             (;X, Y, domain, dx, dy) = p
             J= q.J
@@ -733,6 +760,7 @@ function plotensemble(us, zs, ys, (p,q), tmax; title1 = "img/pde_ensemble", titl
             evalkde = [sumgaussian([X[i,j], Y[i,j]], yall) for i in 1:size(X,1), j in 1:size(X,2)]
             heatmap(x_arr, y_arr, evalkde', c=cmap, title=string("Distribution of influencers at time ", string(round(savetimes[k], digits=2)))) #|> display
             savefig(string(title2,string(k),".png"))
+            savefig(string(title2,string(k),".pdf"))
         end
     end
 
@@ -795,6 +823,7 @@ function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, scenario="4inf
 
     if save==true
         savefig(string("img/pde_snapshots_",scenario,".png"))
+        savefig(string("img/pde_snapshots_",scenario,".pdf"))
     end
 end
 
@@ -824,6 +853,7 @@ function plotarray(u,z,y, (p,q), t; save=true, clmax = maximum(u), scenario="4in
 
     if save==true
         savefig(string("img/pde_array_",scenario,".png"))
+        savefig(string("img/pde_array_",scenario,".pdf"))
     end
 
     return plt
@@ -881,6 +911,7 @@ function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf", labely="influence
 
     if save==true
         savefig(string("img/pde_single_",scenario,".png"))
+        savefig(string("img/pde_single_",scenario,".pdf"))
     end
     return subp
 end

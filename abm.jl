@@ -331,7 +331,13 @@ function kdeplot(centers, inf, media, state, xinf, (p,q); title = "",labelx1 = "
     end
     if scenario=="4inf"
         scatter!(subp, inf[1,:], inf[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
+        # for j in 1:J
+        #     scatter!(subp, [inf[1,j]], [inf[2,j]], markercolor=colors_followers[j],markersize=size_leaders, lab=labely)
+        # end
     end
+    # for i in 1:2
+    #     scatter!(subp, [media[1,i]], [media[2,i]], markercolor=colors_leaders[2],markersize=size_leaders, lab=labelz,markershape=markers_readers[i])
+    # end
     scatter!(subp, media[1,:], media[2,:], markercolor=colors_leaders[2],markersize=size_leaders, lab=labelz)
     return subp
 end
@@ -365,6 +371,7 @@ function ABMplotarray(x, xinf, state, inf, media,  (p,q), t; save = true, scenar
 
     if save==true
         savefig(string("img/abm_array_",scenario,".png"))
+        savefig(string("img/abm_array_",scenario,".pdf"))
     end
 end
 
@@ -395,29 +402,10 @@ function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, 
 
     if save==true
         savefig(string("img/abm_snapshots_",scenario,".png"))
+        savefig(string("img/abm_snapshots_",scenario,".pdf"))
     end
 end
 
-
-function ABMplotfollowernumbers(xinfs,(p,q),scenario="4inf")
-    N = size(xinfs,1) #number of timesteps
-    (; J) = q
-    (;dt) = p
-    markers = [ "O"  "▽"  "△"  "☆"] #https://docs.julialang.org/en/v1/manual/unicode-input/
-    numbers = zeros(N,J)
-    for j in 1:J
-        for n in 1:N
-            numbers[n,j] = size(findall( x -> x == j, xinfs[n]),1)
-        end
-        if j==1
-            plot(dt*collect(1:N), numbers[:,j], label = markers[j],legend=:bottomleft)
-        else
-            plot!(dt*collect(1:N), numbers[:,j], label = markers[j])
-        end
-    end
-    savefig(string("img/abm_follower_",scenario,".png"))
-
-end
 
 
 
@@ -462,8 +450,20 @@ function plotfollowernumbers(xinfs,state,(p,q);scenario="4inf")
     areaplot(dt*collect(1:N), (1/n)*reshape(numbers,(N, J*2)), seriescolor = permutedims(scolors), fillalpha = permutedims(alphas),title="Proportion of followers",labels = permutedims(labels),size=(95*5,60*5),xlabel="t")
 
     savefig(string("img/abm_follower_",scenario,".png"))
+    savefig(string("img/abm_follower_",scenario,".pdf"))
 end
 
+
+function plotorder(orderparameters, ord_infs, ord_meds, (p,q))
+    N = size(ord_infs,1) #number of timesteps
+    (; J,n) = q
+    (;dt) = p    
+    plot(dt*collect(0:N-1), ord_infs,label="wrt to influencers",size=(95*5,60*5),legend=:bottomright,title="Orderparameter",xlabel="t")
+    plot!(dt*collect(0:N-1), ord_meds,label="wrt to media")
+    savefig(string("img/abm_order_",scenario,".png"))
+    savefig(string("img/abm_order_",scenario,".pdf"))
+
+end
 
 function ABMplotsingle(x, inf,xinf, media, state, (p,q), t; save = true, scenario="4inf")
     (; J) = q
@@ -474,6 +474,7 @@ function ABMplotsingle(x, inf,xinf, media, state, (p,q), t; save = true, scenari
 
     if save==true
         savefig(string("img/abm_single_",scenario,".png"))
+        savefig(string("img/abm_single_",scenario,".pdf"))
     end
 end
 
@@ -515,9 +516,20 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, scenario="4inf", p = ABM
     savetimes = Int.(round.(LinRange(1, NT, savepoints)))
     av_counts = zeros(J,2)
     states = [-1 1]
-    Threads.@threads for k=1:N
+    ord_infs_mean = zeros(NT+1)
+    ord_meds_mean =  zeros(NT+1)
+    ord_infs_sqrmean = zeros(NT+1)
+    ord_meds_sqrmean =  zeros(NT+1)
+    #Threads.@threads 
+    for k=1:N
         xs, xinfs, infs, meds, state, _, counts,orderparameters, ord_infs, ord_meds = ABMsolve(NT;  p=p, q=q, scenario=scenario)
         av_counts = av_counts +  counts*(1/N)
+
+        ord_infs_mean += ord_infs*(1/N)
+        ord_meds_mean +=  ord_meds*(1/N)    
+        ord_infs_sqrmean += ord_infs.^2*(1/N)
+        ord_meds_sqrmean +=  ord_meds.^2*(1/N)   
+
 
         for m in 1:savepoints
             t = savetimes[m]
@@ -539,8 +551,8 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, scenario="4inf", p = ABM
 
     end
 
-    @save string("data/abm_ensemble_",scenario,".jld2") us zs ys
-    return us, zs, ys, (p,q), av_counts 
+    @save string("data/abm_ensemble_",scenario,".jld2") us zs ys ord_infs_mean ord_meds_mean ord_infs_sqrmean ord_meds_sqrmean 
+    return us, zs, ys, (p,q), av_counts, ord_infs_mean, ord_meds_mean, ord_infs_sqrmean, ord_meds_sqrmean 
 end
 
 function ABMplotensemble(us, zs, ys, (p,q), NT; clmax = 0.5, scenario="4inf")
@@ -600,32 +612,28 @@ function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; 
 
         end
     end
-    gridp = plot(plot_array..., layout=(savepoints,2),size=(95*6,savepoints*35*6),link=:all)#, left_margin=10mm )
-
+    gridp = plot(plot_array..., layout=(savepoints,2),size=(95*6,savepoints*27*6),link=:all)#, left_margin=10mm )
     #share axis
     for k=1:savepoints
         plot!(gridp[2k],yformatter=_->"")
  
     end
-
-
-
     for k=1:2*savepoints-2
         plot!(gridp[k],xformatter=_->"")
     end
-
     savefig(string("img/ensemblesnapshots_",scenario,".png"))
-
+    savefig(string("img/ensemblesnapshots_",scenario,".pdf"))
 end
 
 
 
 function runensembles(N; NT=200, tmax=2., savepoints = 5, q=parameters(),clmax=0.5,sigma=0.1) #0.025 works well with 1000 siulations
-    us, zs, ys, (p,q), av_counts = solveensemble(tmax, N;savepoints=savepoints, q=q)
-    plotensemble(us, zs, ys,(p,q), tmax; clmax=clmax)
-    us2, zs2, ys2, (p2,q2), av_counts2 = ABMsolveensemble(NT,N; savepoints=savepoints, q=q,sigma=sigma)
-    ABMplotensemble(us2, zs2, ys2, (p2,q2), NT; clmax=clmax)
-    return us, zs, ys, (p,q), av_counts, us2, zs2, ys2, (p2,q2), av_counts2
+    us, zs, ys, (p,q), av_counts, ord_infs_mean, ord_meds_mean, ord_infs_sqrmean, ord_meds_sqrmean = solveensemble(tmax, N;savepoints=savepoints, q=q)
+    #plotensemble(us, zs, ys,(p,q), tmax; clmax=clmax)
+    us2, zs2, ys2, (p2,q2), av_counts2, ord_infs_mean2, ord_meds_mean2, ord_infs_sqrmean2, ord_meds_sqrmean2 = ABMsolveensemble(NT,N; savepoints=savepoints, q=q,sigma=sigma)
+    #ABMplotensemble(us2, zs2, ys2, (p2,q2), NT; clmax=clmax)
+    plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; scenario="4inf")
+    return us, zs, ys, (p,q), av_counts, ord_infs_mean, ord_meds_mean, ord_infs_sqrmean, ord_meds_sqrmean, us2, zs2, ys2, (p2,q2), av_counts2, ord_infs_mean2, ord_meds_mean2, ord_infs_sqrmean2, ord_meds_sqrmean2
 end
 
 function runensembles_noinf(N; NT=100, tmax=1.,savepoints = 5, q=parameters(),clmax=0.5,sigma=0.1)
@@ -634,5 +642,21 @@ function runensembles_noinf(N; NT=100, tmax=1.,savepoints = 5, q=parameters(),cl
     plotensemble(us, zs, ys, (p,q), tmax; clmax=clmax,scenario=scenario)
     us2, zs2, ys2, (p2,q2), av_counts2 = ABMsolveensemble(NT,N; scenario=scenario, savepoints=savepoints, q=q,sigma=sigma)
     ABMplotensemble(us2, zs2, ys2, (p2,q2), NT; clmax=clmax,scenario=scenario)
+
+
+    #plot order parameter mean
+    N = size(ord_infs_mean2,1) #number of timesteps
+    (; J,n) = q2
+    (;dt) = p2    
+    plot(dt*collect(0:N-1), ord_infs_mean2,label="wrt to influencers (ABM)",size=(95*5,60*5),legend=:bottomright,title="Orderparameter",xlabel="t")
+    plot!(dt*collect(0:N-1), ord_meds_mean2,label="wrt to media (ABM)")
+    N = size(ord_infs_mean,1)
+    plot!(tmax/N*collect(0:N-1), ord_infs_mean,label="wrt to influencers (PDE)",size=(95*5,60*5),legend=:bottomright,title="Orderparameter",xlabel="t")
+    plot!(tmax/N*collect(0:N-1), ord_meds_mean,label="wrt to media (PDE)")
+    savefig(string("img/ensemble_order_",scenario,".png"))
+    savefig(string("img/ensemble_order_",scenario,".pdf"))
+
     return us, zs, ys, (p,q), av_counts, us2, zs2, ys2, (p2,q2), av_counts2
 end
+
+
