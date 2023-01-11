@@ -1,12 +1,6 @@
 using NLopt
 using Distributions
 
-function parameters_optcont(;ntarg=3, speedbound = 2, Tmax = 5,tequil = 5.,dtmin =0.001,start="influencer", boundfactor = 0.7,maximize="corner",alpha=0.05,mindist=5.)
-    r = (; ntarg, speedbound, Tmax,tequil,dtmin,start,boundfactor,maximize,alpha,mindist)
-    #options for start: "zero", "mean", "influencer"
-    #options for maximize: "corner", "follower", "counter_follower"
-    return r
-end
 
 
 #prepare equilibration of density
@@ -22,7 +16,7 @@ function prep(tequil = 5.; p = PDEconstruct(), q= parameters_control(), r=parame
     #add new influencer for control
     u,z,y = sol2uyz(sol1,tequil)
     if countercontrol == "no"
-        q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 1]))
+        q2 = merge(q1, (;J=q1.J+1,controlled = [q1.controlled..., 3]))
         (;N_x, N_y, grid_points,N) = p
         J= q2.J
     elseif countercontrol == "inf" #add one influencer to control and one to stubbornly go into corner
@@ -51,13 +45,13 @@ function prep(tequil = 5.; p = PDEconstruct(), q= parameters_control(), r=parame
         y2[:,1:J-1] = y
         #TODO maybe make constant speed such that starts and ends within 5. time steps
         y2[:,J] = startlocation 
-        startlocationmed = Nothing 
+        startlocationmed = nothing 
     elseif countercontrol == "inf" #add one influencer to control and one to stubbornly go into corner
         y2[:,1:J-2] = y
         #TODO maybe make constant speed such that starts and ends within 5. time steps
         y2[:,J-1] = startlocation 
         y2[:,J] = startlocation   
-        startlocationmed = Nothing  
+        startlocationmed = nothing  
     elseif countercontrol =="med"
         y2[:,1:J-1] = y
         #TODO maybe make constant speed such that starts and ends within 5. time steps
@@ -73,28 +67,6 @@ function prep(tequil = 5.; p = PDEconstruct(), q= parameters_control(), r=parame
     end
 end
  
-
-function uniformdistanced(N, domain, ntarg, mindistance =4.5)
-    samples = [rand(Uniform(domain[1,1], domain[1,2]),ntarg*2)]
-    n_samples = size(samples,1)
-    #print(validsample)
-    while n_samples<N
-        newsample = rand(Uniform(domain[1,1], domain[1,2]),ntarg*2)
-        n_samples = size(samples,1)
-        distances = zeros(n_samples)
-        for i in 1:n_samples
-            distances[i] = norm(samples[i] - newsample)
-        end
-        if minimum(distances)>mindistance
-            push!(samples,newsample)
-        #     print("True")
-        # else
-        #     print("False")
-        end
-    end
-    return samples
-end
-
 
 
 
@@ -119,7 +91,7 @@ function solvefixedtargetsfast(ts, targets, startlocation, (p, q), r, uzy0; save
         Ps = Any[]
         sols = Any[]
     end
-
+    
     for n in 1:n_targets
         target = targets[:,n]'
         Dt = ts[n+1]-ts[n]
@@ -132,8 +104,8 @@ function solvefixedtargetsfast(ts, targets, startlocation, (p, q), r, uzy0; save
         prob = ODEProblem(f,uzy0,(0.0,Dt),(p,q1))
         @time sol = DifferentialEquations.solve(prob, dtmin = dtmin, force_dtmin = true, saveat = 0:savedt:Dt ,save_start=true, abstol = atol, reltol = rtol)
         #check stiff solver solution, how often is solution saved? 
-        followersum += sum([sum(sol(t).x[1][:,:,:,J]) for t in sol.t])*dV*savedt
-        masscorner += sum([sum(sol(t).x[1][bound:end,bound:end,:,:]) for t in sol.t]) *dV*savedt
+        followersum += sum([sum(sol(t).x[1][:,:,:,J])/sum(sol(t).x[1]) for t in sol.t])*savedt
+        masscorner += sum([sum(sol(t).x[1][bound:end,bound:end,:,:])/sum(sol(t).x[1]) for t in sol.t]) *savedt
         speedpenalty +=speed^2*Dt
         #prepare next simulation
         startlocation = target
@@ -155,7 +127,7 @@ end
 vecof2vecs(in::Vector) = collect(eachrow(reshape(in, :, 2)))
 
 
-function solutionfixedtargets(targets;  p=PDEconstructcoarse(),q=parameters_control(), r=parameters_optcont(ntarg = 1 ,maximize="counter_follower",start="zero"), scenario="optimalcontrol",countercontrol = "med",stubborntarget=[1.5 1.5])
+function solutionfixedtargets(targets;  p=PDEconstructcoarse(),q=parameters_control(), r=parameters_optcont(ntarg = 1 ,start="zero"), scenario="optimalcontrol",countercontrol = "no",stubborntarget=[1.5 1.5])
     #options of countercontrol "med" "no" "inf"
     (; ntarg, speedbound, Tmax,tequil,dtmin,start,boundfactor,maximize,alpha) = r
     ts = [0. Tmax/ntarg*collect(1:ntarg)...]
@@ -183,34 +155,8 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
     penalty_list = Float64[]
     iter = 0
 
-    #function constrainttime(result::Vector, x::Vector, grad::Matrix)
-    #    for j in 1:ntarg-2
-    #        result[j] =  x[2*ntarg+j]-x[2*ntarg+j+1] #has to be <=0
-    #    end
-    #end
-
-   # function constrainttime(x::Vector, grad::Matrix)
-    #    sum(x[2*ntarg+1:end]) - Tmax
-    #end
-
-    # function constrainttime(result::Vector, x::Vector, grad::Matrix)
-    #     #ensure that sum of interval sizes == tmax
-    #     result[1] = sum(x[2*ntarg+1:end]) - Tmax #has to be <=0
-    #     result[2] = Tmax - sum(x[2*ntarg+1:end])  #has to be <=0
-    # end 
-
     ts = [0. Tmax/ntarg*collect(1:ntarg)...]
     
-    # function constraintspeed(result::Vector, x::Vector, grad::Matrix)
-    #     xy = reshape(x, (2,ntarg))
-    #     xs = [startlocation[1], xy[1,:]...]
-    #     ys = [startlocation[2], xy[2,:]...]
-    #     #normalized = x[2*ntarg+1:end]*Tmax/sum(x[2*ntarg+1:end])
-    #     #ts = [0., cumsum(normalized)...]
-    #     for j in 1:ntarg
-    #         result[j] = (sqrt((xs[j+1]-xs[j])^2 + (ys[j+1]-ys[j])^2))/(ts[j+1]-ts[j]) - speedbound
-    #     end
-    # end
 
     function Objfun(x::Vector, grad::Vector)
         iter += 1
@@ -262,10 +208,6 @@ function solveopt(; p = PDEconstructcoarse(), q= parameters_control(), r=paramet
 
     
     opt.max_objective = Objfun
-    #inequality_constraint!(opt, constrainttime, 1e-8*ones(ntarg-2)) #constraint time points to be ordered
-    #NLOPT algorithms sometimes jump outside the inequality region, better to use bounds
-    #inequality_constraint!(opt,constrainttime, 1e-8*ones(2)) #constraint time points to be ordered
-    #inequality_constraint!(opt, constraintspeed,  1e-8*ones(ntarg)) #constrain speed
 
     #stopping criteria
     opt.maxtime = mtime
