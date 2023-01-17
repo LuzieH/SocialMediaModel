@@ -1,6 +1,6 @@
 using LinearAlgebra
 using StatsBase
- 
+using Random
 using JLD2
  
 
@@ -186,7 +186,8 @@ end
 
 
 
-function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf")
+function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf",chosenseed=0)
+    Random.seed!(chosenseed)
     (; dt, domain) = p
     (;n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, frictionM) =q
 

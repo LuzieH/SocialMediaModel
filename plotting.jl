@@ -15,7 +15,7 @@ colors_followers = [ "#44AA99"  "#DDCC77"  "#CC6677" "#88CCEE"  ] # [cgrad(:gist
 colors_leaders = ["#BBBBBB" :black ]
 steered_marker = :dtriangle
 controlled_marker =  :xcross #:star6
-markers_readers = [:circle  :utriangle :star5  :xcross]#  :diamond :cross ]
+markers_readers = [:circle  :utriangle]#  :diamond :cross ]
 size_leaders = 10
 size_leaders_pde = 6
 size_individuals = 6
@@ -101,11 +101,6 @@ function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, scenario="4inf
         savefig(string("img/pde_snapshots_",scenario,".png"))
         savefig(string("img/pde_snapshots_",scenario,".pdf"))
     end
-end
-
-sums =  []
-for t in sol2.t 
-    push!(sums, sum(sol2(t).x[1][:,:,:,end])*p.dV)
 end
 
 function plotarray(u,z,y, (p,q), t; save=true, clmax = maximum(u), scenario="4inf")
@@ -305,15 +300,16 @@ function kdeplot(centers, inf, media, state, xinf, (p,q); title = "",labelx1 = "
 
     end
     if scenario=="4inf"
-        scatter!(subp, inf[1,:], inf[2,:], markercolor=colors_leaders[1],markersize=size_leaders, lab=labely)
-        # for j in 1:J
-        #     scatter!(subp, [inf[1,j]], [inf[2,j]], markercolor=colors_followers[j],markersize=size_leaders, lab=labely)
-        # end
+        for j in 1:J
+            #scatter!(subp, [inf[1,j]], [inf[2,j]], markercolor="#828282",markersize=size_leaders,markerstrokewidth=0.25, lab=labely)
+            scatter!(subp, [inf[1,j]], [inf[2,j]], markercolor=colors_followers[j], lab=labely,markersize=size_leaders,markerstrokewidth=1.5)#*0.5, markerstrokecolor = colors_followers[j])
+        end
+
     end
-    # for i in 1:2
-    #     scatter!(subp, [media[1,i]], [media[2,i]], markercolor=colors_leaders[2],markersize=size_leaders, lab=labelz,markershape=markers_readers[i])
-    # end
-    scatter!(subp, media[1,:], media[2,:], markercolor=colors_leaders[2],markersize=size_leaders, lab=labelz)
+
+    for i in 1:2
+        scatter!(subp, [media[1,i]], [media[2,i]], markercolor=colors_leaders[2],markersize=size_leaders, markershape = markers_readers[i], lab=labelz)
+    end
     return subp
 end
 
@@ -402,21 +398,25 @@ function plotfollowernumbers(xinfs,state,(p,q);scenario="4inf")
             end
             push!(alphas, i*0.5)
             push!(scolors, colors_followers[j])
-            if j==1
-                if i==1
-                    push!(labels, "O") #https://docs.julialang.org/en/v1/manual/unicode-input/
-                else
-                    push!(labels,  "△")
-                end
-            else
-                push!(labels, "")
-            end
+            # if j==1
+            #     if i==1
+            #         push!(labels, "O") #https://docs.julialang.org/en/v1/manual/unicode-input/
+            #     else
+            #         push!(labels,  "△")
+            #     end
+            # else
+            #     push!(labels, "")
+            # end
         end
     end
-
+    props = (1/n)*reshape(numbers,(N, J*2))
     #https://docs.juliaplots.org/latest/gallery/pyplot/generated/pyplot-ref58/ 
-    areaplot(dt*collect(1:N), (1/n)*reshape(numbers,(N, J*2)), seriescolor = permutedims(scolors), fillalpha = permutedims(alphas),title="Proportion of followers",labels = permutedims(labels),size=(95*5,60*5),xlabel="t")
-
+    subp = areaplot(dt*collect(1:N), props, seriescolor = permutedims(scolors), fillalpha = permutedims(alphas),title="Proportion of followers",labels = permutedims(labels),size=(95*5,60*5),xlabel="t",legend=false)
+    for j in 1:J
+        for i in 1:2
+            scatter!(subp, [0.05], [sum(props[5,1:2*(j-1) + i])-0.5*props[5,2*(j-1) + i]], markercolor=colors_followers[j],markershape=markers_readers[i],markersize=1.5*size_individuals,legend=false)
+        end
+    end
     savefig(string("img/abm_follower_",scenario,".png"))
     savefig(string("img/abm_follower_",scenario,".pdf"))
 end
