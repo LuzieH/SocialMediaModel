@@ -1,5 +1,0 @@
-ERROR: UndefVarError: runslurm not defined
-Stacktrace:
- [1] top-level scope
-   @ none:1
-Running on 1 threads with 48 BLAS
