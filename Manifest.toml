@@ -2,7 +2,7 @@
 
 julia_version = "1.8.4"
 manifest_format = "2.0"
-project_hash = "af66895a11bfd2c1347c392023bf636dae7774fd"
+project_hash = "569c831274518c5bd6de01e05a6d1edfdb2b3860"
 
 [[deps.AbbreviatedStackTraces]]
 deps = ["Distributed", "REPL"]
@@ -460,14 +460,6 @@ deps = ["Statistics"]
 git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
 uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.4"
-
-[[deps.Fmincon]]
-deps = ["MATLAB", "Mex"]
-git-tree-sha1 = "2477d5e0e174a6ddf805b156b28e313d160be642"
-repo-rev = "master"
-repo-url = "https://github.com/byuflowlab/Fmincon.jl"
-uuid = "e17f865c-a73d-11e9-1c8f-cdf520c7b7e5"
-version = "0.1.0"
 
 [[deps.Fontconfig_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Pkg", "Zlib_jll"]

@@ -1,12 +1,12 @@
-function testabm()
-    xs, xinfs, infs, meds, state, (p,q) = ABMsolveplot(;NT = 10, ts = [1 2],  p = ABMconstruct(), q=parameters(), scenario="4inf")
+function testabm(scenario = "4inf")
+    xs, xinfs, infs, meds, state, (p,q) = ABMsolveplot(;NT = 10, ts = [1 2],  p = ABMconstruct(), q=parameters(), scenario=scenario)
     plotfollowernumbers(xinfs,state,(p,q);scenario=scenario)
     ABMgifsingle(xs, xinfs, state, infs, meds, (p,q))
     return nothing
 end
 
-function testpde()
-    sol, (p,q) = solveplot(; tmax=0.1, ts = [0. 0.1], alg=nothing, scenario="4inf", p = PDEconstructcoarse(), q= parameters())
+function testpde(scenario="4inf")
+    sol, (p,q) = solveplot(; tmax=0.1, ts = [0. 0.1], alg=nothing, scenario=scenario, p = PDEconstructcoarse(), q= parameters())
     gifsingle(sol,(p,q))
     return nothing
 end

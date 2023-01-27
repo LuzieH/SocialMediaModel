@@ -1,3 +1,6 @@
+""" This is the entry file, to be included, for
+using this not as a package but a simple project """
+
 using Revise
 using LinearAlgebra
 
