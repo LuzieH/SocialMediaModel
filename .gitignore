@@ -1,6 +1,6 @@
-/img/
-/data/
-/abm_matlab/
+src/img/
+src/data/
+src/abm_matlab/
 /.vscode/
 sbatch
 SLURM.md
