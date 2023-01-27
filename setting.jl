@@ -1,7 +1,3 @@
-int_decay = 1. #describes how exponential function of agent-agent interaction decays
-order_decay = 1. 
-# leads to stability issues in coarse pde solution if int_decay too Large  (larger than 3)
-
 function parameters(;
         J=4,  #number of influencers
         n_media = 2, #number of media
@@ -25,8 +21,8 @@ function parameters(;
     return q
 end
 
-function parameters_control(;controlspeed = 0.3)
-    q = parameters(;eta=1.,controlspeed = controlspeed) 
+function parametersstronginf()
+    q = parameters(;eta=1.) 
     return q
 end
 
@@ -69,7 +65,6 @@ function PDEconstruct(;
     return p
 end
 
-
 function PDEconstructcoarse()
     return PDEconstruct(;dx = 0.1, dy = 0.1,domain = 2.3*[-1 1; -1 1])
 end
@@ -78,11 +73,9 @@ function PDEconstructmeso() #for final optimal control computations
     return PDEconstruct(;dx = 44/600, dy = 44/600, domain = 2.2*[-1 1; -1 1])
 end
 
-
-
-function parameters_optcont(;ntarg=3, speedbound = 2, Tmax = 5,tequil = 5.,dtmin =0.001,start="influencer", boundfactor = 0.7,maximize="corner",alpha=0.05,mindist=5.)
+function parameterscontrol(;ntarg=3, speedbound = 2, Tmax = 5,tequil = 5.,dtmin =0.001,start="influencer", boundfactor = 0.7,maximize="follower",alpha=0.05,mindist=5.)
     r = (; ntarg, speedbound, Tmax,tequil,dtmin,start,boundfactor,maximize,alpha,mindist)
     #options for start: "zero", "mean", "influencer"
-    #options for maximize: "corner", "follower", "counter_follower"
+    #options for maximize:  "follower", "counter_follower"
     return r
 end
