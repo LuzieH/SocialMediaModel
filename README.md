@@ -15,6 +15,6 @@ In particular, the repository contains:
 ## Usage
 To use the package in Julia, it has to be installed with
 `Pkg.add https://github.com/LuzieH/SocialMediaModel.git`
-and then import the package with `using SocialMediaModel`. 
-Most functions are exported and can be run e.g. with either `SocialMediaModel.ABMsolve()` or simply, `ABMsolve()`. 
+and then imported with `using SocialMediaModel`. 
+Most functions are exported, so instead of calling `SocialMediaModel.ABMsolve()`, they can simply be called with `ABMsolve()`. 
 Tests can be run with `runtests()`. 

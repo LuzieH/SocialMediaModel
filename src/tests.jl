@@ -1,7 +1,7 @@
 function testabm(init = "4inf")
     println("Testing ABM")
     xs, xinfs, infs, meds, state, (p,q) = ABMsolveplot(;NT = 10, ts = [1 2],  p = ABMconstruct(), q=parameters(), init=init,save=false)
-    plotfollowernumbers(xinfs,state,(p,q);name=init,save=false)
+    ABMplotfollowernumbers(xinfs,state,(p,q);name=init,save=false)
     ABMgifsingle(xs, xinfs, state, infs, meds, (p,q),save=false)
     return nothing
 end

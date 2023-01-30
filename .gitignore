@@ -1,6 +1,5 @@
 img
 data
-src/abm_matlab/
 .vscode
 sbatch
 SLURM.md

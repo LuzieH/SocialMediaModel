@@ -203,7 +203,7 @@ function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, 
 end
 
 
-function plotfollowernumbers(xinfs,state,(p,q);save=true,name="4inf")
+function ABMplotfollowernumbers(xinfs,state,(p,q);save=true,name="4inf")
     N = size(xinfs,1) #number of timesteps
     (; J,n) = q
     (;dt) = p

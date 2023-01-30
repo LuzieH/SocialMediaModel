@@ -1,4 +1,4 @@
-using socialpde: runtests
+using SocialMediaModel: runtests
 
 runtests()
 
