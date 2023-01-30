@@ -15,7 +15,7 @@ color_noinf = :white
 
 ### PDE
 
-function plotsingle(u,z,y,(p,q),t; save=true, name="4inf", clim=(0,Inf), ylabel="", title = string("t=", string(round(t, digits=2))))
+function PDEplotsingle(u,z,y,(p,q),t; save=true, name="4inf", clim=(0,Inf), ylabel="", title = string("t=", string(round(t, digits=2))))
     (; domain, dx, dy) = p
     (;controlled_inf, controlled_med) = q
     J= q.J
@@ -57,9 +57,9 @@ function plotsingle(u,z,y,(p,q),t; save=true, name="4inf", clim=(0,Inf), ylabel=
 end
 
 
-plotsnapshots(sol, (p,q), args...; kwargs...) = plotsnapshots([sol], [(p,q)], args...; kwargs...)
+PDEplotsnapshots(sol, (p,q), args...; kwargs...) = PDEplotsnapshots([sol], [(p,q)], args...; kwargs...)
 
-function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf",followercount=false)
+function PDEplotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf",followercount=false)
     n_snapshots = length(ts)
     n_sols =  size(sols,1)
     plot_array = Any[]  
@@ -78,7 +78,7 @@ function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf",fo
                 else
                     label=""
                 end
-                subp = plotsingle(u,z,y,P,t,save=false,name=name, ylabel=ylabel,title=title)
+                subp = PDEplotsingle(u,z,y,P,t,save=false,name=name, ylabel=ylabel,title=title)
                 annotate!([(-1.3, 1.7,text(label,10))])
                 push!(plot_array, subp)
             elseif counter==n_sols && t>= sum_t && t== sum_t + sol.t[end]
@@ -92,7 +92,7 @@ function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf",fo
                 else
                     label=""
                 end
-                subp = plotsingle(u,z,y,P,t,save=false, name=name, ylabel=ylabel,title=title)
+                subp = PDEplotsingle(u,z,y,P,t,save=false, name=name, ylabel=ylabel,title=title)
                 annotate!([(-1.3, 1.7,text(label,10))])
                 push!(plot_array, subp)
             end
@@ -112,15 +112,15 @@ function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf",fo
     end
 end
 
-gifsingle(sol, (p,q), args...; kwargs...) = gifsingle([sol], [(p,q)], args...; kwargs...)
+PDEgifsingle(sol, (p,q), args...; kwargs...) = PDEgifsingle([sol], [(p,q)], args...; kwargs...)
 
-function gifsingle(sols::Vector, Ps::Vector, dt=0.1; save=true, name = "4inf")
+function PDEgifsingle(sols::Vector, Ps::Vector, dt=0.1; save=true, name = "4inf")
     T = 0
     anim = Animation()
     for (sol, P) in zip(sols, Ps)
         for t in 0:dt:sol.t[end]
             u,z,y = sol2uyz(sol, t)
-            plt = plotsingle(u,z,y,P,t+T,save=false, name=name)
+            plt = PDEplotsingle(u,z,y,P,t+T,save=false, name=name)
             frame(anim, plt)
         end
         T += sol.t[end]
@@ -301,7 +301,7 @@ function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; 
                 title=""
             end
             
-            subp = plotsingle(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], (p_i,qi),savetimes[k]; save=false, name=name, clim=(0,clmax),title=title,ylabel=ylabel)
+            subp = PDEplotsingle(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], (p_i,qi),savetimes[k]; save=false, name=name, clim=(0,clmax),title=title,ylabel=ylabel)
             push!(plot_array, subp)
 
         end

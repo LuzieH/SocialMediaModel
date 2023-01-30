@@ -65,7 +65,7 @@ end
  
 """ solve system with controled influencers/media to given fixed targets """
 
-function solvefixedtargetsfast(ts, targets, startlocation, (p, q), r, uzy0; savedt=0.05, atol = 1e-6, rtol = 1e-3,dtmin = 0.001,countercontrol="no", stubborntarget=nothing, startlocationmed = nothing,returnsol=false)
+function PDEsolvefixedtargetsfast(ts, targets, startlocation, (p, q), r, uzy0; savedt=0.05, atol = 1e-6, rtol = 1e-3,dtmin = 0.001,countercontrol="no", stubborntarget=nothing, startlocationmed = nothing,returnsol=false)
     n_targets = size(targets,2)
     followersum=0.
     speedpenalty=0.
@@ -90,7 +90,7 @@ function solvefixedtargetsfast(ts, targets, startlocation, (p, q), r, uzy0; save
 
         speed = norm(target - startlocation)/Dt
         #restrict speedbound?
-        q1 = merge(q, (;controltarget = target, controlspeed = speed))
+        q1 = merge(q, (;controltarget1 = target, controlspeed1 = speed))
 
         # solve ODE with added influencer
         prob = ODEProblem(f,uzy0,(0.0,Dt),(p,q1))
@@ -118,7 +118,7 @@ end
 vecof2vecs(in::Vector) = collect(eachrow(reshape(in, :, 2)))
 
 """ prepare and solve system with controlled influencers/media to given fixed targets """
-function solvefixedtargets(targets;  p=PDEconstructcoarse(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), init="uniform",countercontrol = "no",stubborntarget=[1.5 1.5])
+function PDEsolvefixedtargets(targets;  p=PDEconstructcoarse(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), init="uniform",countercontrol = "no",stubborntarget=[1.5 1.5])
     #options of countercontrol "med" "no" "inf"
     (; ntarg, Tmax,tequil,dtmin) = r
     ts = [0. Tmax/ntarg*collect(1:ntarg)...]
@@ -126,7 +126,7 @@ function solvefixedtargets(targets;  p=PDEconstructcoarse(),q=parametersstrongin
 
     uzy0, startlocation, (p,q2), startlocationmed, sol1, (p,q1) = prep(tequil;dtmin=dtmin, p=p, q=q, r=r, init=init,countercontrol = countercontrol,returnsol=true)
     
-    followersum, speedpenalty, sols, Ps= solvefixedtargetsfast(ts, targets, startlocation, (p, q2),r, uzy0, dtmin = dtmin,countercontrol=countercontrol, stubborntarget=stubborntarget, startlocationmed = startlocationmed, returnsol=true)
+    followersum, speedpenalty, sols, Ps= PDEsolvefixedtargetsfast(ts, targets, startlocation, (p, q2),r, uzy0, dtmin = dtmin,countercontrol=countercontrol, stubborntarget=stubborntarget, startlocationmed = startlocationmed, returnsol=true)
     prepend!(sols,[sol1])
     prepend!(Ps, [(p,q1)])
     return followersum, speedpenalty, sols, Ps
@@ -135,7 +135,7 @@ end
 
 
 
-function solveopt(; p = PDEconstructcoarse(), q= parametersstronginf(), r=parameterscontrol(), alg=:LN_COBYLA, mtime = 1000, meval=-1, ftol_rel=1e-4, xtol_rel = 1e-2, x0=zeros(2*r.ntarg),countercontrol="no",stubborntarget=nothing, multistart =false,save=true)
+function PDEsolveopt(; p = PDEconstructcoarse(), q= parametersstronginf(), r=parameterscontrol(), alg=:LN_COBYLA, mtime = 1000, meval=-1, ftol_rel=1e-4, xtol_rel = 1e-2, x0=zeros(2*r.ntarg),countercontrol="no",stubborntarget=nothing, multistart =false,save=true)
         
     (; ntarg, Tmax,tequil,dtmin,start,maximize,alpha) = r
     uzy0, startlocation, (p,q),startlocationmed =  prep(tequil; p=p, q=q, r=r, dtmin = dtmin,countercontrol=countercontrol)
@@ -155,7 +155,7 @@ function solveopt(; p = PDEconstructcoarse(), q= parametersstronginf(), r=parame
         targets = reshape(x,(2,ntarg))  #reshape into correct input format
 
         
-        followersum, speedpenalty = solvefixedtargetsfast(ts, targets, startlocation, (p, q),r, uzy0, dtmin = dtmin,countercontrol=countercontrol, stubborntarget=stubborntarget, startlocationmed = startlocationmed)
+        followersum, speedpenalty = PDEsolvefixedtargetsfast(ts, targets, startlocation, (p, q),r, uzy0, dtmin = dtmin,countercontrol=countercontrol, stubborntarget=stubborntarget, startlocationmed = startlocationmed)
         speedpenalty = alpha*speedpenalty
         push!(x_list, x)
         push!(followersum_list, followersum)

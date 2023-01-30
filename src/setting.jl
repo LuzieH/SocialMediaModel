@@ -11,13 +11,13 @@ function parameters(;
         sigmatilde = 0., # noise on media
         frictionI = 10., # friction for influencers
         frictionM = 100.,  #friction for media
-        controlspeed = sqrt(1.5^2 +1.5^2)/5, 
-        controltarget = [1.5 1.5],
-        controlspeed2 = sqrt(1.5^2 +1.5^2)/5, 
+        controlspeed1 = sqrt(1.5^2 +1.5^2)/5, #control definition of first influencer or medium
+        controltarget1 = [1.5 1.5],
+        controlspeed2 = sqrt(1.5^2 +1.5^2)/5, #control definition of another influencer
         controltarget2 = [1.5 1.5]
     )
 
-    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed,controltarget, controlspeed2,controltarget2)
+    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed1,controltarget1, controlspeed2,controltarget2)
     return q
 end
 

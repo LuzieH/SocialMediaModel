@@ -50,7 +50,7 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, init="4inf", p = ABMcons
 end
 
 
-function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
+function PDEsolveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
     (; N_x, N_y) = p
     J=q.J
 
@@ -62,7 +62,7 @@ function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, init="4inf",
     #Threads.@threads
     local P 
     for i=1:N
-        sol, P = solve(tmax; alg=alg, init=init, p=p, q=q) 
+        sol, P = PDEsolve(tmax; alg=alg, init=init, p=p, q=q) 
 
         for j in 1:savepoints
             u,z,y = sol2uyz(sol, savetimes[j])
@@ -81,7 +81,7 @@ end
 
 function runensembles(N; NT=200, tmax=2., savepoints = 5, q=parameters(),sigma=0.1,save=true)
     # pde
-    us, zs, ys, (p,q)= solveensemble(tmax, N;savepoints=savepoints, q=q,save=save)
+    us, zs, ys, (p,q)= PDEsolveensemble(tmax, N;savepoints=savepoints, q=q,save=save)
     # abm
     us2, zs2, ys2, (p2,q2) = ABMsolveensemble(NT,N; savepoints=savepoints, q=q,sigma=sigma,save=save)
     plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; name="4inf",save=save)

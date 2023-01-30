@@ -1,9 +1,9 @@
 function counterglobal(;mtime = 800000, meval=-1, alg=:LN_COBYLA, ntarg = 3,countercontrol = "med", p = PDEconstructmeso())
-    return solveopt(; p = p, q= parametersstronginf(),r=parameterscontrol(ntarg=ntarg,maximize="counter_follower",start="zero"), alg=alg, mtime = mtime, meval=meval, ftol_rel=1e-4, xtol_rel = 1e-2, multistart =true,countercontrol=countercontrol,stubborntarget=[1.5 1.5],x0 = rand(Uniform(-2,2),2*ntarg))
+    return PDEsolveopt(; p = p, q= parametersstronginf(),r=parameterscontrol(ntarg=ntarg,maximize="counter_follower",start="zero"), alg=alg, mtime = mtime, meval=meval, ftol_rel=1e-4, xtol_rel = 1e-2, multistart =true,countercontrol=countercontrol,stubborntarget=[1.5 1.5],x0 = rand(Uniform(-2,2),2*ntarg))
 end
 
 function counterlocal(x0; mtime = 800000, meval=-1, alg=:LN_COBYLA, ntarg = 3, countercontrol = "med", p = PDEconstructmeso())
-    return solveopt(;p=p, q= parametersstronginf(),r=parameterscontrol(ntarg=ntarg,maximize="counter_follower",start="zero"), alg=alg, mtime = mtime, meval=meval, ftol_rel=0., xtol_rel = 0., multistart =false,countercontrol=countercontrol,stubborntarget=[1.5 1.5],x0 = x0)
+    return PDEsolveopt(;p=p, q= parametersstronginf(),r=parameterscontrol(ntarg=ntarg,maximize="counter_follower",start="zero"), alg=alg, mtime = mtime, meval=meval, ftol_rel=0., xtol_rel = 0., multistart =false,countercontrol=countercontrol,stubborntarget=[1.5 1.5],x0 = x0)
 end
 
 function Gcobmed(;mtime = 432000,meval = -1, p = PDEconstructmeso())
@@ -41,8 +41,8 @@ end
 # simulations and plots of different strategies 
 
 function infrightcorner()
-    followersum, speedpenalty, sols, Ps = solvefixedtargets([1.5 1.5];  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), init="uniform",countercontrol = "no",stubborntarget=[1.5 1.5])
-    plotsnapshots(sols, Ps, [5. 7. 8.5 10.]; name="infmax",followercount=true)
+    followersum, speedpenalty, sols, Ps = PDEsolvefixedtargets([1.5 1.5];  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), init="uniform",countercontrol = "no",stubborntarget=[1.5 1.5])
+    PDEplotsnapshots(sols, Ps, [5. 7. 8.5 10.]; name="infmax",followercount=true)
     return followersum, speedpenalty
 end
 
@@ -55,8 +55,8 @@ function infcounteraction(;targets =  [ 0.5604084588036462
     0.8060867535176255
     0.7718781212141405])
 
-    followersum, speedpenalty, sols, Ps = solvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), init="uniform",countercontrol = "inf",stubborntarget=[1.5 1.5])
-    plotsnapshots(sols, Ps, [5. 6. 7.5 10.]; name="counterinf",followercount=true)
+    followersum, speedpenalty, sols, Ps = PDEsolvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), init="uniform",countercontrol = "inf",stubborntarget=[1.5 1.5])
+    PDEplotsnapshots(sols, Ps, [5. 6. 7.5 10.]; name="counterinf",followercount=true)
     return followersum, speedpenalty
 end
 
@@ -69,7 +69,7 @@ function medcounteraction(;targets = [  1.8106679226546316
      1.5683845474974514
     -1.7962804090565507])
 
-    followersum, speedpenalty, sols, Ps = solvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), init="uniform",countercontrol = "med",stubborntarget=[1.5 1.5])
-    plotsnapshots(sols, Ps, [5. 6. 7.5 10.];  name="countermed",followercount=true)
+    followersum, speedpenalty, sols, Ps = PDEsolvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), init="uniform",countercontrol = "med",stubborntarget=[1.5 1.5])
+    PDEplotsnapshots(sols, Ps, [5. 6. 7.5 10.];  name="countermed",followercount=true)
     return followersum, speedpenalty
 end

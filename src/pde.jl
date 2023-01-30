@@ -172,7 +172,7 @@ end
 
 function f(duzy,uzy,(p,q),t)
     yield()
-    (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled_inf, controlled_med,controlspeed,controltarget, controlspeed2,controltarget2) = q
+    (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled_inf, controlled_med,controlspeed1,controltarget1, controlspeed2,controltarget2) = q
     (; grid_points, N_x, N_y,N, K_matrix, W_matrix, dx,dy, dV, C,  M) = p
     
     D = sigma^2 * 0.5
@@ -228,9 +228,9 @@ function f(duzy,uzy,(p,q),t)
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)
 
-            elseif controlled_inf[j] == 1 #controll movement
-                if norm(controltarget' - yj) >0
-                    dyj .= controlspeed* (controltarget' - yj)./ norm(controltarget' - yj)
+            elseif controlled_inf[j] == 1 #first controlled influencer, movement defined by specified target and speed
+                if norm(controltarget1' - yj) >0
+                    dyj .= controlspeed1* (controltarget1' - yj)./ norm(controltarget1' - yj)
                 else
                     dyj .= 0
                 end
@@ -241,9 +241,9 @@ function f(duzy,uzy,(p,q),t)
                     dyj .= 0
                 end
             end
-            if controlled_med[i] ==1 
-                if norm(controltarget' - zi) >0
-                    dzi .= controlspeed* (controltarget' - zi)./ norm(controltarget' - zi)
+            if controlled_med[i] ==1 #controlled medium
+                if norm(controltarget1' - zi) >0
+                    dzi .= controlspeed1* (controltarget1' - zi)./ norm(controltarget1' - zi)
                 else
                     dzi .= 0
                 end
@@ -270,7 +270,7 @@ function sol2uyz(sol, t)
 end
 
 
-function solve(tmax=0.1; alg=nothing, init="4inf", p = PDEconstruct(), q= parameters())
+function PDEsolve(tmax=0.1; alg=nothing, init="4inf", p = PDEconstruct(), q= parameters())
 
     uzy0,  controlled_inf,controlled_med,q = constructinitial(init,(p,q))
     q = (; q..., controlled_inf,controlled_med)
@@ -283,9 +283,9 @@ function solve(tmax=0.1; alg=nothing, init="4inf", p = PDEconstruct(), q= parame
 end
 
 
-function solveplot(; tmax=2.0, ts = [0. 0.1 0.4 1.2 2.0], alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
-    sol,(p,q) = solve(tmax; alg=alg, init=init, p=p, q=q)
-    plotsnapshots(sol, (p,q), ts;  name=init,save=save)
+function PDEsolveplot(; tmax=2.0, ts = [0. 0.1 0.4 1.2 2.0], alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
+    sol,(p,q) = PDEsolve(tmax; alg=alg, init=init, p=p, q=q)
+    PDEplotsnapshots(sol, (p,q), ts;  name=init,save=save)
  
     return sol, (p,q)
 end
