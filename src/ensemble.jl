@@ -8,7 +8,7 @@ function sumgaussian(x, centers;sigma=0.1)
 end 
 
 
-function ABMsolveensemble(NT=200, N=10; savepoints = 4, scenario="4inf", p = ABMconstruct(), q= parameters(),sigma=0.1)
+function ABMsolveensemble(NT=200, N=10; savepoints = 4, init="4inf", p = ABMconstruct(), q= parameters(),sigma=0.1,save=true)
     (; X, Y, domain, dx, dy) = p
     (; n, J) = q
     x_arr = domain[1,1]:dx:domain[1,2]
@@ -22,7 +22,7 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, scenario="4inf", p = ABM
     states = [-1 1]
 
     for k=1:N
-        xs, xinfs, infs, meds, state, _ = ABMsolve(NT;  p=p, q=q, scenario=scenario)
+        xs, xinfs, infs, meds, state, _ = ABMsolve(NT;  p=p, q=q, init=init)
 
         for m in 1:savepoints
             t = savetimes[m]
@@ -43,13 +43,14 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, scenario="4inf", p = ABM
         end
 
     end
-
-    @save string("data/abm_ensemble_",scenario,".jld2") us zs ys 
+    if save==true
+        @save string("data/abm_ensemble_",init,".jld2") us zs ys 
+    end
     return us, zs, ys, (p,q)
 end
 
 
-function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
+function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
     (; N_x, N_y) = p
     J=q.J
 
@@ -61,7 +62,7 @@ function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4i
     #Threads.@threads
     local P 
     for i=1:N
-        sol, P = solve(tmax; alg=alg, scenario=scenario, p=p, q=q) 
+        sol, P = solve(tmax; alg=alg, init=init, p=p, q=q) 
 
         for j in 1:savepoints
             u,z,y = sol2uyz(sol, savetimes[j])
@@ -71,18 +72,19 @@ function solveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, scenario="4i
         end
 
     end
-
-    @save string("data/pde_ensemble_",scenario,".jld2") us zs ys 
+    if save==true
+        @save string("data/pde_ensemble_",init,".jld2") us zs ys 
+    end
     return us, zs, ys, P
 end
 
 
-function runensembles(N; NT=200, tmax=2., savepoints = 5, q=parameters(),sigma=0.1) #0.025 works well with 1000 siulations
+function runensembles(N; NT=200, tmax=2., savepoints = 5, q=parameters(),sigma=0.1,save=true)
     # pde
-    us, zs, ys, (p,q)= solveensemble(tmax, N;savepoints=savepoints, q=q)
+    us, zs, ys, (p,q)= solveensemble(tmax, N;savepoints=savepoints, q=q,save=save)
     # abm
-    us2, zs2, ys2, (p2,q2) = ABMsolveensemble(NT,N; savepoints=savepoints, q=q,sigma=sigma)
-    plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; scenario="4inf")
+    us2, zs2, ys2, (p2,q2) = ABMsolveensemble(NT,N; savepoints=savepoints, q=q,sigma=sigma,save=save)
+    plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; name="4inf",save=save)
     return us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2)
 end
 

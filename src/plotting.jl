@@ -15,7 +15,7 @@ color_noinf = :white
 
 ### PDE
 
-function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf", labely="influencers", labelx="media", clim=(0,Inf), legend=true, ylabel="", title = string("t=", string(round(t, digits=2))))
+function plotsingle(u,z,y,(p,q),t; save=true, name="4inf", clim=(0,Inf), ylabel="", title = string("t=", string(round(t, digits=2))))
     (; domain, dx, dy) = p
     (;controlled_inf, controlled_med) = q
     J= q.J
@@ -26,11 +26,11 @@ function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf", labely="influence
 
     dens = dropdims(sum(u, dims=(3,4)), dims=(3,4))
 
-    subp = heatmap(x_arr,y_arr, dens', title = title,ylabel=ylabel, c=cmap,clim=clim,legend=legend)
+    subp = heatmap(x_arr,y_arr, dens', title = title,ylabel=ylabel, c=cmap,clim=clim, legend=false)
 
     for i in 1:2
         if controlled_med[i]==0
-            scatter!(subp, [z[1,i]], [z[2,i]], markercolor=colors_leaders[2],markersize=size_leaders_pde, lab = labelx)
+            scatter!(subp, [z[1,i]], [z[2,i]], markercolor=colors_leaders[2],markersize=size_leaders_pde)
         elseif controlled_med[i]==1
             scatter!(subp, [z[1,i]], [z[2,i]], markercolor=colors_leaders[2],markersize=size_leaders_pde, markershape = controlled_marker,lab="")
         end
@@ -39,19 +39,19 @@ function plotsingle(u,z,y,(p,q),t; save=true, scenario="4inf", labely="influence
 
     for j in 1:J
         if controlled_inf[j]==0
-            scatter!(subp, [y[1,j]], [y[2,j]], markercolor=colors_leaders[1],markersize=size_leaders_pde, lab=labely)
+            scatter!(subp, [y[1,j]], [y[2,j]], markercolor=colors_leaders[1],markersize=size_leaders_pde)
         elseif controlled_inf[j]==1
-            scatter!(subp, [y[1,j]], [y[2,j]], markercolor=colors_leaders[1],markersize=size_leaders_pde, markershape = controlled_marker,lab="")
+            scatter!(subp, [y[1,j]], [y[2,j]], markercolor=colors_leaders[1],markersize=size_leaders_pde, markershape = controlled_marker)
         elseif controlled_inf[j]==3
-            scatter!(subp, [y[1,j]], [y[2,j]], markercolor=colors_leaders[1],markersize=size_leaders_pde, markershape = steered_marker,lab="")
+            scatter!(subp, [y[1,j]], [y[2,j]], markercolor=colors_leaders[1],markersize=size_leaders_pde, markershape = steered_marker)
         end
     end
 
 
 
     if save==true
-        savefig(string("img/pde_single_",scenario,".png"))
-        savefig(string("img/pde_single_",scenario,".pdf"))
+        savefig(string("img/pde_single_",name,".png"))
+        savefig(string("img/pde_single_",name,".pdf"))
     end
     return subp
 end
@@ -59,7 +59,7 @@ end
 
 plotsnapshots(sol, (p,q), args...; kwargs...) = plotsnapshots([sol], [(p,q)], args...; kwargs...)
 
-function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, scenario="4inf",followercount=false)
+function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf",followercount=false)
     n_snapshots = length(ts)
     n_sols =  size(sols,1)
     plot_array = Any[]  
@@ -78,7 +78,7 @@ function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, scenario="4inf
                 else
                     label=""
                 end
-                subp = plotsingle(u,z,y,P,t,save=false,scenario=scenario, labely="", labelx="",ylabel=ylabel,title=title)
+                subp = plotsingle(u,z,y,P,t,save=false,name=name, ylabel=ylabel,title=title)
                 annotate!([(-1.3, 1.7,text(label,10))])
                 push!(plot_array, subp)
             elseif counter==n_sols && t>= sum_t && t== sum_t + sol.t[end]
@@ -92,7 +92,7 @@ function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, scenario="4inf
                 else
                     label=""
                 end
-                subp = plotsingle(u,z,y,P,t,save=false, scenario=scenario, labely="", labelx="",ylabel=ylabel,title=title)
+                subp = plotsingle(u,z,y,P,t,save=false, name=name, ylabel=ylabel,title=title)
                 annotate!([(-1.3, 1.7,text(label,10))])
                 push!(plot_array, subp)
             end
@@ -107,32 +107,34 @@ function plotsnapshots(sols::Vector, Ps::Vector, ts; save = true, scenario="4inf
     end
 
     if save==true
-        savefig(string("img/pde_snapshots_",scenario,".png"))
-        savefig(string("img/pde_snapshots_",scenario,".pdf"))
+        savefig(string("img/pde_snapshots_",name,".png"))
+        savefig(string("img/pde_snapshots_",name,".pdf"))
     end
 end
 
 gifsingle(sol, (p,q), args...; kwargs...) = gifsingle([sol], [(p,q)], args...; kwargs...)
 
-function gifsingle(sols::Vector, Ps::Vector, dt=0.1; scenario = "4inf",legend=false)
+function gifsingle(sols::Vector, Ps::Vector, dt=0.1; save=true, name = "4inf")
     T = 0
     anim = Animation()
     for (sol, P) in zip(sols, Ps)
         for t in 0:dt:sol.t[end]
             u,z,y = sol2uyz(sol, t)
-            plt = plotsingle(u,z,y,P,t+T,save=false, scenario=scenario,legend=legend)
+            plt = plotsingle(u,z,y,P,t+T,save=false, name=name)
             frame(anim, plt)
         end
         T += sol.t[end]
     end
-    Plots.gif(anim, string("img/pde_single_",scenario,".gif"), fps = 10)
+    if save==true
+        Plots.gif(anim, string("img/pde_single_",name,".gif"), fps = 10)
+    end
 end
 
  
 
 ### ABM
 
-function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", labelx2="",labely ="", labelz ="", clim=(-Inf, Inf),color_agents=false,sigma=0.1,ylabel="", kde =true)
+function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim=(-Inf, Inf),color_agents=false,sigma=0.1,ylabel="", kde =true)
     (;X, Y, domain, dx, dy) = p
     (;J) = q
     n= q.n
@@ -141,9 +143,9 @@ function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", labe
     y_arr = domain[2,1]:dy:domain[2,2]
     if kde==true
         evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers,sigma=sigma) for i in 1:size(X,1), j in 1:size(X,2)]
-        subp = heatmap(x_arr, y_arr, evalkde', c=cmap, title = title,alpha=0.9, clims=clim,ylabel=ylabel)
+        subp = heatmap(x_arr, y_arr, evalkde', c=cmap, title = title,alpha=0.9, clims=clim, leg=false,ylabel=ylabel)
     else
-        subp=plot(ylabel=ylabel)
+        subp=plot(leg=false,ylabel=ylabel)
     end
     if color_agents==false
         scatter!(subp, centers[:,1], centers[:,2], markercolor=color_noinf,markersize=size_individuals, markerstrokewidth=0.5)
@@ -155,25 +157,25 @@ function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", labe
                 xm = findall(x-> x==states[i], state)
                 choice = intersect(xi, xm)
                 if J>1
-                    scatter!(subp, centers[choice,1], centers[choice,2], markercolor=colors_followers[j],markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.5, lab = labelx2)
+                    scatter!(subp, centers[choice,1], centers[choice,2], markercolor=colors_followers[j],markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.5)
                 else
-                    scatter!(subp, centers[choice,1], centers[choice,2], markercolor=color_noinf,markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.5, lab = labelx2)
+                    scatter!(subp, centers[choice,1], centers[choice,2], markercolor=color_noinf,markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.5)
                 end
             end
         end
     end
     
     for j in 1:J
-        scatter!(subp, [inf[1,j]], [inf[2,j]], markercolor=colors_followers[j], lab=labely,markersize=size_leaders,markerstrokewidth=1.5)#*0.5, markerstrokecolor = colors_followers[j])
+        scatter!(subp, [inf[1,j]], [inf[2,j]], markercolor=colors_followers[j],markersize=size_leaders,markerstrokewidth=1.5)
     end
 
     for i in 1:2
-        scatter!(subp, [media[1,i]], [media[2,i]], markercolor=colors_leaders[2],markersize=size_leaders, markershape = markers_readers[i], lab=labelz)
+        scatter!(subp, [media[1,i]], [media[2,i]], markercolor=colors_leaders[2],markersize=size_leaders, markershape = markers_readers[i])
     end
     return subp
 end
 
-function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, scenario="4inf",sigma=0.1,kde=false)
+function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, name="4inf",sigma=0.1,kde=false)
     (;dt) = p
     n_snapshots = length(ts)
     plot_array = Any[]  
@@ -195,13 +197,13 @@ function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, 
     end
 
     if save==true
-        savefig(string("img/abm_snapshots_",scenario,".png"))
-        savefig(string("img/abm_snapshots_",scenario,".pdf"))
+        savefig(string("img/abm_snapshots_",name,".png"))
+        savefig(string("img/abm_snapshots_",name,".pdf"))
     end
 end
 
 
-function plotfollowernumbers(xinfs,state,(p,q);scenario="4inf")
+function plotfollowernumbers(xinfs,state,(p,q);save=true,name="4inf")
     N = size(xinfs,1) #number of timesteps
     (; J,n) = q
     (;dt) = p
@@ -232,12 +234,14 @@ function plotfollowernumbers(xinfs,state,(p,q);scenario="4inf")
             scatter!(subp, [0.05], [sum(props[5,1:2*(j-1) + i])-0.5*props[5,2*(j-1) + i]], markercolor=colors_followers[j],markershape=markers_readers[i],markersize=1.5*size_individuals,legend=false)
         end
     end
-    savefig(string("img/abm_follower_",scenario,".png"))
-    savefig(string("img/abm_follower_",scenario,".pdf"))
+    if save==true
+        savefig(string("img/abm_follower_",name,".png"))
+        savefig(string("img/abm_follower_",name,".pdf"))
+    end
 end
 
 
-function ABMgifsingle(xs, xinfs, state, infs, meds, (p,q); dN=5, scenario="4inf")
+function ABMgifsingle(xs, xinfs, state, infs, meds, (p,q); save=true, dN=5, name="4inf")
     NT=size(xs,1)
     (;dt) = p
 
@@ -245,12 +249,14 @@ function ABMgifsingle(xs, xinfs, state, infs, meds, (p,q); dN=5, scenario="4inf"
         subp = ABMplotsingle(xs[t], infs[t]', meds[t]',state,xinfs[t], (p,q), title = string("t = ", string(round((t-1)*dt, digits=2))),color_agents=true)
         plot(subp)
     end
-    Plots.gif(abmgif, string("img/abm_single_",scenario,".gif"), fps = 10)
+    if save==true
+        Plots.gif(abmgif, string("img/abm_single_",name,".gif"), fps = 10)
+    end
 end
 
 ### ENSEMBLE
 
-function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; scenario="4inf")
+function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; save=true,name="4inf")
     N = size(ys,4)
     savepoints = size(us,5)
     savetimes = LinRange(0,tmax,savepoints)
@@ -295,12 +301,12 @@ function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; 
                 title=""
             end
             
-            subp = plotsingle(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], (p_i,qi),savetimes[k]; save=false, scenario=scenario, labely="", labelx="", legend=legend,clim=(0,clmax),title=title,ylabel=ylabel)
+            subp = plotsingle(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], (p_i,qi),savetimes[k]; save=false, name=name, clim=(0,clmax),title=title,ylabel=ylabel)
             push!(plot_array, subp)
 
         end
     end
-    gridp = plot(plot_array..., layout=(savepoints,2),size=(95*6,savepoints*27*6),link=:all)#, left_margin=10mm )
+    gridp = plot(plot_array..., layout=(savepoints,2),size=(95*6,savepoints*27*6),link=:all)
     #share axis
     for k=1:savepoints
         plot!(gridp[2k],yformatter=_->"")
@@ -309,7 +315,10 @@ function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; 
     for k=1:2*savepoints-2
         plot!(gridp[k],xformatter=_->"")
     end
-    savefig(string("img/ensemblesnapshots_",scenario,".png"))
-    savefig(string("img/ensemblesnapshots_",scenario,".pdf"))
+
+    if save==true
+        savefig(string("img/ensemblesnapshots_",name,".png"))
+        savefig(string("img/ensemblesnapshots_",name,".pdf"))
+    end
 end
 

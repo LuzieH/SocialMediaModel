@@ -73,8 +73,8 @@ function PDEconstructmeso() #for final optimal control computations
     return PDEconstruct(;dx = 44/600, dy = 44/600, domain = 2.2*[-1 1; -1 1])
 end
 
-function parameterscontrol(;ntarg=3, speedbound = 2, Tmax = 5,tequil = 5.,dtmin =0.001,start="influencer", boundfactor = 0.7,maximize="follower",alpha=0.05,mindist=5.)
-    r = (; ntarg, speedbound, Tmax,tequil,dtmin,start,boundfactor,maximize,alpha,mindist)
+function parameterscontrol(;ntarg=3, speedbound = 2, Tmax = 5,tequil = 5.,dtmin =0.001, start="influencer", maximize="follower",alpha=0.05,mindist=5.)
+    r = (; ntarg, speedbound, Tmax,tequil,dtmin,start,maximize,alpha,mindist)
     #options for start: "zero", "mean", "influencer"
     #options for maximize:  "follower", "counter_follower"
     return r

@@ -160,13 +160,11 @@ function randominit((p,q))
     return ArrayPartition(u0,z0,y0),  controlled_inf,controlled_med
 end
 
-function constructinitial(scenario,(p,q))
-    if scenario=="4inf"
+function constructinitial(init,(p,q))
+    if init=="4inf"
         uzy0,  controlled_inf,controlled_med = randominit((p,q))
-    elseif scenario =="uniform"
+    elseif init =="uniform"
         uzy0, controlled_inf,controlled_med = uniforminit((p,q))
-    elseif scenario=="control"
-        uzy0,  controlled_inf,controlled_med = uniforminit((p,q))
     end
     return uzy0, controlled_inf,controlled_med,q
 end
@@ -272,9 +270,9 @@ function sol2uyz(sol, t)
 end
 
 
-function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
+function solve(tmax=0.1; alg=nothing, init="4inf", p = PDEconstruct(), q= parameters())
 
-    uzy0,  controlled_inf,controlled_med,q = constructinitial(scenario,(p,q))
+    uzy0,  controlled_inf,controlled_med,q = constructinitial(init,(p,q))
     q = (; q..., controlled_inf,controlled_med)
 
     # Solve the ODE
@@ -285,9 +283,9 @@ function solve(tmax=0.1; alg=nothing, scenario="4inf", p = PDEconstruct(), q= pa
 end
 
 
-function solveplot(; tmax=2.0, ts = [0. 0.1 0.4 1.2 2.0], alg=nothing, scenario="4inf", p = PDEconstruct(), q= parameters())
-    sol,(p,q) = solve(tmax; alg=alg, scenario=scenario, p=p, q=q)
-    plotsnapshots(sol, (p,q), ts;  scenario=scenario)
+function solveplot(; tmax=2.0, ts = [0. 0.1 0.4 1.2 2.0], alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
+    sol,(p,q) = solve(tmax; alg=alg, init=init, p=p, q=q)
+    plotsnapshots(sol, (p,q), ts;  name=init,save=save)
  
     return sol, (p,q)
 end

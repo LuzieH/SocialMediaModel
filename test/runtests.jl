@@ -1,11 +1,5 @@
-using socialpde: testabm, testpde, testensemble, testcontrol, testoptimization
+using socialpde: runtests
 
-cd("..")  # in order to find the output directories
+runtests()
 
-testabm("4inf")
-testpde("4inf")
-testpde("uniform")
 
-testensemble()
-testcontrol()
-testoptimization()

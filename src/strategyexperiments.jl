@@ -22,7 +22,7 @@ function Lcobinf(x0; mtime = 130000,meval = -1, p = PDEconstructmeso())
     return counterlocal(x0;mtime = mtime, meval=meval, alg=:LN_COBYLA, ntarg = 4,countercontrol = "inf",p=p)
 end
 
-""" final experiments to find strategies of media and influencer counteraction """
+#final experiments to find strategies of media and influencer counteraction 
 
 # global 10 days = 864000, local 3 days=259200
 function GLmed(;mtime = 864000, mtime2 = 259200)
@@ -38,11 +38,11 @@ function GLinf(;mtime = 864000, mtime2 = 259200)
 end
 
 
-""" simulations and plots of different strategies """
+# simulations and plots of different strategies 
 
 function infrightcorner()
-    followersum, speedpenalty, sols, Ps = solvefixedtargets([1.5 1.5];  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), scenario="control",countercontrol = "no",stubborntarget=[1.5 1.5])
-    plotsnapshots(sols, Ps, [5. 7. 8.5 10.]; scenario="infmax",followercount=true)
+    followersum, speedpenalty, sols, Ps = solvefixedtargets([1.5 1.5];  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), init="uniform",countercontrol = "no",stubborntarget=[1.5 1.5])
+    plotsnapshots(sols, Ps, [5. 7. 8.5 10.]; name="infmax",followercount=true)
     return followersum, speedpenalty
 end
 
@@ -55,8 +55,8 @@ function infcounteraction(;targets =  [ 0.5604084588036462
     0.8060867535176255
     0.7718781212141405])
 
-    followersum, speedpenalty, sols, Ps = solvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), scenario="control",countercontrol = "inf",stubborntarget=[1.5 1.5])
-    plotsnapshots(sols, Ps, [5. 6. 7.5 10.]; scenario="counterinf",followercount=true)
+    followersum, speedpenalty, sols, Ps = solvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), init="uniform",countercontrol = "inf",stubborntarget=[1.5 1.5])
+    plotsnapshots(sols, Ps, [5. 6. 7.5 10.]; name="counterinf",followercount=true)
     return followersum, speedpenalty
 end
 
@@ -69,7 +69,7 @@ function medcounteraction(;targets = [  1.8106679226546316
      1.5683845474974514
     -1.7962804090565507])
 
-    followersum, speedpenalty, sols, Ps = solvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), scenario="control",countercontrol = "med",stubborntarget=[1.5 1.5])
-    plotsnapshots(sols, Ps, [5. 6. 7.5 10.];  scenario="countermed",followercount=true)
+    followersum, speedpenalty, sols, Ps = solvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), init="uniform",countercontrol = "med",stubborntarget=[1.5 1.5])
+    plotsnapshots(sols, Ps, [5. 6. 7.5 10.];  name="countermed",followercount=true)
     return followersum, speedpenalty
 end

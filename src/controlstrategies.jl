@@ -2,8 +2,8 @@ using NLopt
 using Distributions
 
 """ prepare equilibration of system """
-function prep(tequil = 5.; p = PDEconstruct(), q= parametersstronginf(), r=parameterscontrol(), scenario = "control",  savedt=0.05, atol = 1e-6, rtol = 1e-3,dtmin = 0.001,countercontrol="no",returnsol=false)
-    uzy0,controlled_inf,controlled_med,q = constructinitial(scenario,(p,q))
+function prep(tequil = 5.; p = PDEconstruct(), q= parametersstronginf(), r=parameterscontrol(), init = "uniform",  savedt=0.05, atol = 1e-6, rtol = 1e-3,dtmin = 0.001,countercontrol="no",returnsol=false)
+    uzy0,controlled_inf,controlled_med,q = constructinitial(init,(p,q))
     q1 = (; q..., controlled_inf,controlled_med)
     start = r.start
     # Solve the ODE
@@ -118,13 +118,13 @@ end
 vecof2vecs(in::Vector) = collect(eachrow(reshape(in, :, 2)))
 
 """ prepare and solve system with controlled influencers/media to given fixed targets """
-function solvefixedtargets(targets;  p=PDEconstructcoarse(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), scenario="control",countercontrol = "no",stubborntarget=[1.5 1.5])
+function solvefixedtargets(targets;  p=PDEconstructcoarse(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), init="uniform",countercontrol = "no",stubborntarget=[1.5 1.5])
     #options of countercontrol "med" "no" "inf"
     (; ntarg, Tmax,tequil,dtmin) = r
     ts = [0. Tmax/ntarg*collect(1:ntarg)...]
     targets = reshape(targets,(2,ntarg))  #reshape into correct input format
 
-    uzy0, startlocation, (p,q2), startlocationmed, sol1, (p,q1) = prep(tequil;dtmin=dtmin, p=p, q=q, r=r, scenario=scenario,countercontrol = countercontrol,returnsol=true)
+    uzy0, startlocation, (p,q2), startlocationmed, sol1, (p,q1) = prep(tequil;dtmin=dtmin, p=p, q=q, r=r, init=init,countercontrol = countercontrol,returnsol=true)
     
     followersum, speedpenalty, sols, Ps= solvefixedtargetsfast(ts, targets, startlocation, (p, q2),r, uzy0, dtmin = dtmin,countercontrol=countercontrol, stubborntarget=stubborntarget, startlocationmed = startlocationmed, returnsol=true)
     prepend!(sols,[sol1])
@@ -135,7 +135,7 @@ end
 
 
 
-function solveopt(; p = PDEconstructcoarse(), q= parametersstronginf(), r=parameterscontrol(), alg=:LN_COBYLA, mtime = 1000, meval=-1, ftol_rel=1e-4, xtol_rel = 1e-2, x0=zeros(2*r.ntarg),countercontrol="no",stubborntarget=nothing, multistart =false)
+function solveopt(; p = PDEconstructcoarse(), q= parametersstronginf(), r=parameterscontrol(), alg=:LN_COBYLA, mtime = 1000, meval=-1, ftol_rel=1e-4, xtol_rel = 1e-2, x0=zeros(2*r.ntarg),countercontrol="no",stubborntarget=nothing, multistart =false,save=true)
         
     (; ntarg, Tmax,tequil,dtmin,start,maximize,alpha) = r
     uzy0, startlocation, (p,q),startlocationmed =  prep(tequil; p=p, q=q, r=r, dtmin = dtmin,countercontrol=countercontrol)
@@ -163,7 +163,7 @@ function solveopt(; p = PDEconstructcoarse(), q= parametersstronginf(), r=parame
         println("followersum $followersum at x $x")
         println("speedpenalty $speedpenalty")
         GC.gc(true)
-        #check_memory()
+
         if maximize=="follower"
             return followersum - alpha*speedpenalty
         elseif maximize =="counter_follower"
@@ -203,7 +203,9 @@ function solveopt(; p = PDEconstructcoarse(), q= parametersstronginf(), r=parame
     (maxf,maxx,ret) = optimize(opt, x0)
     numevals = opt.numevals # the number of function evaluations
     println("got $maxf at $maxx after $numevals iterations (returned $ret)")
-    @save string("data/opt_strategy",string(ntarg),string(alg),maximize,start,string(multistart),countercontrol,".jld2") maxf maxx ret numevals x_list followersum_list penalty_list 
+    if save==true
+        @save string("data/opt_strategy",string(ntarg),string(alg),maximize,start,string(multistart),countercontrol,".jld2") maxf maxx ret numevals x_list followersum_list penalty_list 
+    end
     return maxf,maxx, ret, numevals, x_list,followersum_list, penalty_list
 end 
 

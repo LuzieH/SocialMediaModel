@@ -3,13 +3,7 @@ using StatsBase
 using Random
 using JLD2
  
-#TODOS for CLEANING:
 
-# rename scenarios: 4inf -> :4inf, "optimalcontrol"-> :optimal
-# rename controlled = [:average, :controll1, :controll2 ], controlled_med = [:average, :controll3] -maybe allow three control speeds
-# rename counter control, startlocation
-# join the control.jl code and the experiments.jl code 
-# which pde scenarios are needed
 """ create ABM initial conditions """
 function ABMinit((p,q))
     (; n, J) = q
@@ -143,13 +137,13 @@ function changeinfluencer(state,x,fol,inf,(p,q))
 end
 
 
-
-function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf",chosenseed=0)
+"""Simulate the ABM """
+function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",chosenseed=0)
     Random.seed!(chosenseed)
     (; dt, domain) = p
     (;n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, frictionM) =q
 
-    if scenario == "4inf"
+    if init == "4inf"
         x, media, inf, fol, state,Net  = ABMinit((p,q))
     end
 
@@ -207,8 +201,8 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), scenario="4inf"
 
 end
 
-function ABMsolveplot(;NT = 200, ts = [1 11 41 121 201],  p = ABMconstruct(), q=parameters(), scenario="4inf")
-    @time xs, xinfs, infs, meds, state, (p,q) = ABMsolve(NT;  p=p, q=q, scenario=scenario)
-    ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; scenario=scenario)
+function ABMsolveplot(;NT = 200, ts = [1 11 41 121 201],  p = ABMconstruct(), q=parameters(), init="4inf", save=true)
+    @time xs, xinfs, infs, meds, state, (p,q) = ABMsolve(NT;  p=p, q=q, init=init)
+    ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; name=init,save=save)
     return xs, xinfs, infs, meds, state, (p,q)
 end
