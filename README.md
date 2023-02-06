@@ -1,7 +1,7 @@
 # SocialMediaModel
 
 This repository contains the Julia code accompanying the paper 
-"Modelling opinion dynamics under the impact of influencer and media strategies". 
+["Modelling opinion dynamics under the impact of influencer and media strategies"](https://arxiv.org/abs/2301.13661). 
 
 
 ## Components
