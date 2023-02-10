@@ -159,7 +159,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         attforce= attraction(xold,Net)
         leader_force= influence(xold,media,inf,fol,state,(p,q))
         force = a * attforce + leader_force
-        x = xold + dt*force + sqrt(dt*sigma)*randn(n,2); 
+        x = xold + dt*force + sqrt(dt)*sigma*randn(n,2); 
 
         # dont allow agents to escape domain
         ind1 = findall(x->x>domain[1,2],x)
@@ -173,7 +173,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         for i in 1:J
             if sum(fol[:,i])>0 
                 masscenter[i,:] =sum(fol[:,i] .* x, dims = 1) /sum(fol[:,i])
-                inf[i,:] =  inf[i,:]  + dt/frictionI * (masscenter[i,:]-inf[i,:]) + 1/frictionI*sqrt(dt*sigmahat)*randn(2,1)
+                inf[i,:] =  inf[i,:]  + dt/frictionI * (masscenter[i,:]-inf[i,:]) + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1)
             end
         end
         
@@ -184,7 +184,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         for i in 1:n_media
             x_M = findall(x->x==states[i], state)
             masscenter[i,:] = sum(xold[x_M,:], dims=1)/size(x_M,1)
-            media[i,:] = media[i,:]  + dt/frictionM * (masscenter[i,:] -media[i,:]) + 1/frictionM * sqrt(dt*sigmatilde)*randn(2,1)
+            media[i,:] = media[i,:]  + dt/frictionM * (masscenter[i,:] -media[i,:]) + 1/frictionM * sqrt(dt)*sigmatilde*randn(2,1)
         end
         
         # individual may jump from one influencer to another
