@@ -15,7 +15,7 @@ end
 
 function testensemble()
     println("Testing Ensemble Simulation")
-    runensembles(2; NT=10, tmax=0.1, savepoints = 2, q=parameters(),sigma=0.1,save=false)
+    runensembles(2; NT=10, tmax=0.1, savepoints = 2, q=parameters(),sigma=0.1,save=true)
     return nothing
 end
 

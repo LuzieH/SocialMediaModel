@@ -166,7 +166,8 @@ function constructinitial(init,(p,q))
     elseif init =="uniform"
         uzy0, controlled_inf,controlled_med = uniforminit((p,q))
     end
-    return uzy0, controlled_inf,controlled_med,q
+    q = (; q..., controlled_inf,controlled_med)
+    return uzy0, q
 end
 
 
@@ -272,9 +273,8 @@ end
 
 function PDEsolve(tmax=0.1; alg=nothing, init="4inf", p = PDEconstruct(), q= parameters())
 
-    uzy0,  controlled_inf,controlled_med,q = constructinitial(init,(p,q))
-    q = (; q..., controlled_inf,controlled_med)
-
+    uzy0, q = constructinitial(init,(p,q))
+    
     # Solve the ODE
     prob = ODEProblem(f,uzy0,(0.0,tmax),(p,q))
     @time sol = DifferentialEquations.solve(prob, alg, alg_hints = [:stiff], save_start=true)

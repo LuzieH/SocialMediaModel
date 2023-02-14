@@ -22,7 +22,7 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, init="4inf", p = ABMcons
     states = [-1 1]
 
     for k=1:N
-        xs, xinfs, infs, meds, state, _ = ABMsolve(NT;  p=p, q=q, init=init)
+        xs, xinfs, infs, meds, state, _ = ABMsolve(NT;  p=p, q=q, init=init,chosenseed=k)
 
         for m in 1:savepoints
             t = savetimes[m]
@@ -84,7 +84,7 @@ function runensembles(N; NT=200, tmax=2., savepoints = 5, q=parameters(),sigma=0
     us, zs, ys, (p,q)= PDEsolveensemble(tmax, N;savepoints=savepoints, q=q,save=save)
     # abm
     us2, zs2, ys2, (p2,q2) = ABMsolveensemble(NT,N; savepoints=savepoints, q=q,sigma=sigma,save=save)
-    plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; name="4inf",save=save)
-    return us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2)
+    plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q), tmax; name="4inf",save=save)
+    return us, zs, ys, (p,q), us2, zs2, ys2, (p2,q)
 end
 

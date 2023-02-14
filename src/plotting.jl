@@ -17,7 +17,7 @@ color_noinf = :white
 
 function PDEplotsingle(u,z,y,(p,q),t; save=true, name="4inf", clim=(0,Inf), ylabel="", title = string("t=", string(round(t, digits=2))))
     (; domain, dx, dy) = p
-    (;controlled_inf, controlled_med) = q
+    (;controlled_inf, controlled_med) = q #this only works for controlled scenario!
     J= q.J
 
 

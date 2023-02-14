@@ -3,8 +3,7 @@ using Distributions
 
 """ prepare equilibration of system """
 function prep(tequil = 5.; p = PDEconstruct(), q= parametersstronginf(), r=parameterscontrol(), init = "uniform",  savedt=0.05, atol = 1e-6, rtol = 1e-3,dtmin = 0.001,countercontrol="no",returnsol=false)
-    uzy0,controlled_inf,controlled_med,q = constructinitial(init,(p,q))
-    q1 = (; q..., controlled_inf,controlled_med)
+    uzy0, q1 = constructinitial(init,(p,q))
     start = r.start
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
