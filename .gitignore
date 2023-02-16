@@ -2,4 +2,4 @@ img
 data
 .vscode
 sbatch
-SLURM.md
+slurm.md
