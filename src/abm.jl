@@ -43,6 +43,41 @@ function ABMinit((p,q))
     return x, media, inf, fol, state, Net
 end
 
+function ABM2cluster((p,q))
+    (; n, J) = q
+
+    # individuals' opinions
+    x = rand(n,2).*4 .-2 
+    # media opinions
+    media =[-1. -1.; 1. 1.]
+
+    #network between individuals and influencers
+    fol=zeros(n, J)
+    for i in 1:n
+        choice = ceil(Int,rand()*J)
+        fol[i,choice] =1
+    end
+
+    #initial opinions of influencers
+    inf = [-1. -1.; -1. 1.; 1. -1. ;1. 1.]
+
+    # initial medium per individual, either medium -1 or 1
+    state = (rand(n).>0.5)*2 .-1
+
+    #initialization of interaction network between individuals
+    Net = zeros(n,n)  # everyone connected to everyone including self-connections
+    for i in 1:n
+        for j in 1:n
+            if x[i,1]*x[j,1]>0
+                Net[i,j] = 1
+            end
+        end
+    end
+
+    return x, media, inf, fol, state, Net
+end
+
+
 function attraction(x, Net)
     n = size(Net, 1)
     force = zeros(n,2)
@@ -53,7 +88,7 @@ function attraction(x, Net)
         else
             fi = [0 0]
             w_sum=0
-            for i in 1:length(L)
+            for i in eachindex(L)
                 d = x[L[i],:]-x[j,:]
                 w = exp(-sqrt(d[1]^2 +d[2]^2))
                 fi = fi + w*d'
@@ -141,16 +176,20 @@ end
 function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",chosenseed=0)
     Random.seed!(chosenseed)
     (; dt, domain) = p
-    (;n, n_media, J, sigma, sigmahat, sigmatilde, a, b,c, frictionI, frictionM) =q
+    (;n, n_media, J, sigma, sigmahat, sigmatilde, a,  frictionI, frictionM) =q
 
     if init == "4inf"
         x, media, inf, fol, state,Net  = ABMinit((p,q))
+    elseif init=="2cluster"
+        x, media, inf, fol, state,Net  = ABM2cluster((p,q))
+    else
+        x, media, inf, fol, state,Net  = ABMinit((p,q))
     end
 
-    xs = [x] 
-    infs = [inf]
-    meds = [media]
-    xinfs = [fol * collect(1:J)]
+    xs = [copy(x)] 
+    infs = [copy(inf)]
+    meds = [copy(media)]
+    xinfs = [copy(fol) * collect(1:J)]
 
     for k in 2:NT+1
         xold = x
@@ -187,6 +226,18 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
             media[i,:] = media[i,:]  + dt/frictionM * (masscenter[i,:] -media[i,:]) + 1/frictionM * sqrt(dt)*sigmatilde*randn(2,1)
         end
         
+
+        # dont allow influencers and media to escape domain
+        ind1 = findall(x->x>domain[1,2],inf)
+        ind2 = findall(x->x<domain[1,1],inf)
+        inf[ind1] .= 2
+        inf[ind2] .= -2
+        ind1 = findall(x->x>domain[1,2],media)
+        ind2 = findall(x->x<domain[1,1],media)
+        media[ind1] .= 2
+        media[ind2] .= -2
+
+
         # individual may jump from one influencer to another
         # jumps according to rate model
         fol = changeinfluencer(state,xold,fol,inf,(p,q))
@@ -201,8 +252,20 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
 
 end
 
-function ABMsolveplot(;NT = 200, ts = [1 11 41 121 201],  p = ABMconstruct(), q=parameters(), init="4inf", save=true)
-    @time xs, xinfs, infs, meds, state, (p,q) = ABMsolve(NT;  p=p, q=q, init=init)
+function ABMsolveplot(;NT = 200, ts = [1 11 41 101 151 201],  p = ABMconstruct(), q=parameters(), init="4inf", save=true,seed=0)
+    @time xs, xinfs, infs, meds, state, (p,q) = ABMsolve(NT;  p=p, q=q, init=init,chosenseed=seed)
     ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; name=init,save=save)
+    ABMplotfollowernumbers(xinfs,state,(p,q))
     return xs, xinfs, infs, meds, state, (p,q)
 end
+
+#tested experiments for appendix: 
+#ABMsolveplot(NT=100,ts=[1,11,41,101], init="4infstrongc",q=parameters(a=1,b=2,c=4))
+#ABMsolveplot(NT=1000,ts=[1 11 51 101 201 301 401 501],init="4inf4cluster",q=parameters(a=5,b=1,c=1))
+
+
+#good!
+#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infstrongc",q=parameters(a=1,b=1,c=3))
+#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infstronga",q=parameters(a=3,b=1,c=1))
+#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infweakgamma",q=parameters(frictionI=2))
+#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infweakgamma3noise",q=parameters(sigmahat=1,frictionI=3),seed=1)

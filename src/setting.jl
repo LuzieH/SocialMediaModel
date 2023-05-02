@@ -26,6 +26,7 @@ function parametersstronginf()
     return q
 end
 
+
 function ABMconstruct(;
         # setting simulation parameters
         dt = 0.01,  # simulation stepsize 

@@ -42,7 +42,7 @@ end
 
 function infrightcorner()
     followersum, speedpenalty, sols, Ps = PDEsolvefixedtargets([1.5 1.5];  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 1 ,start="zero"), init="uniform",countercontrol = "no",stubborntarget=[1.5 1.5])
-    PDEplotsnapshots(sols, Ps, [5. 7. 8.5 10.]; name="infmax",followercount=true)
+    PDEplotsnapshots1row(sols, Ps, [5. 7. 8.5 10.]; name="infmax",followercount=true)
     return followersum, speedpenalty
 end
 
@@ -56,7 +56,7 @@ function infcounteraction(;targets =  [ 0.5604084588036462
     0.7718781212141405])
 
     followersum, speedpenalty, sols, Ps = PDEsolvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), init="uniform",countercontrol = "inf",stubborntarget=[1.5 1.5])
-    PDEplotsnapshots(sols, Ps, [5. 6. 7.5 10.]; name="counterinf",followercount=true)
+    PDEplotsnapshots1row(sols, Ps, [5. 6. 7.5 10.]; name="counterinf",followercount=true)
     return followersum, speedpenalty
 end
 
@@ -70,6 +70,6 @@ function medcounteraction(;targets = [  1.8106679226546316
     -1.7962804090565507])
 
     followersum, speedpenalty, sols, Ps = PDEsolvefixedtargets(targets;  p=PDEconstruct(),q=parametersstronginf(), r=parameterscontrol(ntarg = 4 ,start="zero"), init="uniform",countercontrol = "med",stubborntarget=[1.5 1.5])
-    PDEplotsnapshots(sols, Ps, [5. 6. 7.5 10.];  name="countermed",followercount=true)
+    PDEplotsnapshots1row(sols, Ps, [5. 6. 7.5 10.];  name="countermed",followercount=true)
     return followersum, speedpenalty
 end

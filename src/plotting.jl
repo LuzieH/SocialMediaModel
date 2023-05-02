@@ -61,6 +61,9 @@ PDEplotsnapshots(sol, (p,q), args...; kwargs...) = PDEplotsnapshots([sol], [(p,q
 
 function PDEplotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf",followercount=false)
     n_snapshots = length(ts)
+    if n_snapshots%2!=0
+        print("The function assumes an even number of time points to be given")
+    end
     n_sols =  size(sols,1)
     plot_array = Any[]  
     sum_t = 0
@@ -69,8 +72,8 @@ function PDEplotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf"
         for t in ts
             if t>= sum_t && t< sum_t + sol.t[end]  
                 u,z,y = sol2uyz(sol, t-sum_t)
-                ylabel =string("t = ", string(round(t, digits=2)))
-                title=""
+                title =string("t = ", string(round(t, digits=2)))
+
                 if followercount == true && t>=5
                     (p,q) = P
                     sum_followers = sum(sol(t-sum_t).x[1][:,:,:,end])/sum(sol(t-sum_t).x[1])
@@ -78,13 +81,13 @@ function PDEplotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf"
                 else
                     label=""
                 end
-                subp = PDEplotsingle(u,z,y,P,t,save=false,name=name, ylabel=ylabel,title=title)
+                subp = PDEplotsingle(u,z,y,P,t,save=false,name=name,  title=title)
                 annotate!([(-1.3, 1.7,text(label,10))])
                 push!(plot_array, subp)
             elseif counter==n_sols && t>= sum_t && t== sum_t + sol.t[end]
                 u,z,y = sol2uyz(sol, t-sum_t)
-                ylabel =string("t = ", string(round(t, digits=2)))
-                title=""
+                title =string("t = ", string(round(t, digits=2)))
+
                 if followercount == true && t>=5
                     (p,q) = P
                     sum_followers = sum(sol(t-sum_t).x[1][:,:,:,end])/sum(sol(t-sum_t).x[1])
@@ -92,7 +95,7 @@ function PDEplotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf"
                 else
                     label=""
                 end
-                subp = PDEplotsingle(u,z,y,P,t,save=false, name=name, ylabel=ylabel,title=title)
+                subp = PDEplotsingle(u,z,y,P,t,save=false, name=name,  title=title)
                 annotate!([(-1.3, 1.7,text(label,10))])
                 push!(plot_array, subp)
             end
@@ -100,10 +103,77 @@ function PDEplotsnapshots(sols::Vector, Ps::Vector, ts; save = true, name="4inf"
         sum_t+= sol.t[end]
         counter+=1
     end    
-    gridp=plot(plot_array..., layout=(n_snapshots,1),size=(95*5,n_snapshots*50*5),link=:all)#, left_margin=10mm )
+    gridp=plot(plot_array..., layout=n_snapshots,size=(n_snapshots/2*300,2*300),link=:all)
+ 
 
-    for k=1:n_snapshots-1
+    for k=1:n_snapshots
+        if k % round(Int,n_snapshots/2) != 1
+            plot!(gridp[k],yformatter=_->"")
+        end
+    end
+    for k=1:round(Int,n_snapshots/2)
         plot!(gridp[k],xformatter=_->"")
+    end
+
+    if save==true
+        savefig(string("img/pde_snapshots_",name,".png"))
+        savefig(string("img/pde_snapshots_",name,".pdf"))
+    end
+end
+
+PDEplotsnapshots1row(sol, (p,q), args...; kwargs...) = PDEplotsnapshots1row([sol], [(p,q)], args...; kwargs...)
+
+function PDEplotsnapshots1row(sols::Vector, Ps::Vector, ts; save = true, name="4inf",followercount=false)
+    n_snapshots = length(ts)
+    if n_snapshots%2!=0
+        print("The function assumes an even number of time points to be given")
+    end
+    n_sols =  size(sols,1)
+    plot_array = Any[]  
+    sum_t = 0
+    counter =1
+    for (sol, P) in zip(sols, Ps)
+        for t in ts
+            if t>= sum_t && t< sum_t + sol.t[end]  
+                u,z,y = sol2uyz(sol, t-sum_t)
+                title =string("t = ", string(round(t, digits=2)))
+
+                if followercount == true && t>=5
+                    (p,q) = P
+                    sum_followers = sum(sol(t-sum_t).x[1][:,:,:,end])/sum(sol(t-sum_t).x[1])
+                    label =string(L" \Sigma_m \, n_{m,5} =  ",string(round(sum_followers,digits = 3)))
+                else
+                    label=""
+                end
+                subp = PDEplotsingle(u,z,y,P,t,save=false,name=name,  title=title)
+                annotate!([(-1.3, 1.7,text(label,10))])
+                push!(plot_array, subp)
+            elseif counter==n_sols && t>= sum_t && t== sum_t + sol.t[end]
+                u,z,y = sol2uyz(sol, t-sum_t)
+                title =string("t = ", string(round(t, digits=2)))
+
+                if followercount == true && t>=5
+                    (p,q) = P
+                    sum_followers = sum(sol(t-sum_t).x[1][:,:,:,end])/sum(sol(t-sum_t).x[1])
+                    label =string(L" \Sigma_m\, n_{m,5} =  ",string(round(sum_followers,digits = 3)))
+                else
+                    label=""
+                end
+                subp = PDEplotsingle(u,z,y,P,t,save=false, name=name,  title=title)
+                annotate!([(-1.3, 1.7,text(label,10))])
+                push!(plot_array, subp)
+            end
+        end
+        sum_t+= sol.t[end]
+        counter+=1
+    end    
+    gridp=plot(plot_array..., layout=(1,n_snapshots),size=(n_snapshots*300,300),link=:all)
+ 
+
+    for k=1:n_snapshots
+        if k % round(Int,n_snapshots) != 1
+            plot!(gridp[k],yformatter=_->"")
+        end
     end
 
     if save==true
@@ -134,7 +204,7 @@ end
 
 ### ABM
 
-function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim=(-Inf, Inf),color_agents=false,sigma=0.1,ylabel="", kde =true)
+function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim=(-Inf, Inf),color_agents=false,sigma=0.1,kde =true)
     (;X, Y, domain, dx, dy) = p
     (;J) = q
     n= q.n
@@ -143,9 +213,9 @@ function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim
     y_arr = domain[2,1]:dy:domain[2,2]
     if kde==true
         evalkde = [(1/n)*sumgaussian([X[i,j], Y[i,j]], centers,sigma=sigma) for i in 1:size(X,1), j in 1:size(X,2)]
-        subp = heatmap(x_arr, y_arr, evalkde', c=cmap, title = title,alpha=0.9, clims=clim, leg=false,ylabel=ylabel)
+        subp = heatmap(x_arr, y_arr, evalkde', c=cmap, title = title,alpha=0.9, clims=clim, leg=false)
     else
-        subp=plot(leg=false,ylabel=ylabel)
+        subp=plot(leg=false, title = title)
     end
     if color_agents==false
         scatter!(subp, centers[:,1], centers[:,2], markercolor=color_noinf,markersize=size_individuals, markerstrokewidth=0.5)
@@ -178,6 +248,9 @@ end
 function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, name="4inf",sigma=0.1,kde=false)
     (;dt) = p
     n_snapshots = length(ts)
+    if n_snapshots%2!=0
+        print("The function assumes an even number of time points to be given")
+    end
     plot_array = Any[]  
     for s in 1:n_snapshots
         t=ts[s]
@@ -185,14 +258,19 @@ function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, 
         inf=infs[t]
         media=meds[t]
         xinf = xinfs[t]
-        ylabel =string("t = ", string(round((t-1)*dt, digits=2)))
-        subp= ABMplotsingle(x, inf', media', state, xinf, (p,q),  clim=(0,0.5),color_agents=true,sigma=sigma,ylabel=ylabel,kde=kde)
+        title =string("t = ", string(round((t-1)*dt, digits=2)))
+        subp= ABMplotsingle(x, inf', media', state, xinf, (p,q),  clim=(0,0.5),color_agents=true,sigma=sigma,title=title,kde=kde)
         push!(plot_array, subp)
     end    
-    gridp=plot(plot_array..., layout=(n_snapshots,1),size=(95*5,n_snapshots*50*5),link=:all)
+    gridp=plot(plot_array..., layout=n_snapshots,size=(n_snapshots/2*300,2*300),link=:all)
  
 
-    for k=1:n_snapshots-1
+    for k=1:n_snapshots
+        if k % round(Int,n_snapshots/2) != 1
+            plot!(gridp[k],yformatter=_->"")
+        end
+    end
+    for k=1:round(Int,n_snapshots/2)
         plot!(gridp[k],xformatter=_->"")
     end
 
@@ -257,8 +335,10 @@ end
 ### ENSEMBLE
 
 function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; save=true,name="4inf")
+    N2 = size(ys2,4)
     N = size(ys,4)
-    savepoints = size(us,5)
+    Ns = [N2, N]
+    savepoints = size(us2,5)
     savetimes = LinRange(0,tmax,savepoints)
 
     us_list = [us2, us]
@@ -270,35 +350,36 @@ function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; 
     plot_array = Any[]  
 
     maxus = dropdims(maximum(dropdims(sum(us,dims=(3,4,6)),dims=(3,4,6))*(1/N),dims=(1,2)),dims=(1,2))
-    maxus2 = dropdims(maximum(dropdims(sum(us2,dims=(3,4,6)),dims=(3,4,6))*(1/N),dims=(1,2)),dims=(1,2))
-    for k in 1:savepoints
-        clmax = maximum([maxus[k],maxus2[k]])
-        for i in 1:2
-            usi = us_list[i]
-            zsi = zs_list[i]
-            ysi = ys_list[i]
-            p_i = p_list[i]
-            qi = q_list[i]
+    maxus2 = dropdims(maximum(dropdims(sum(us2,dims=(3,4,6)),dims=(3,4,6))*(1/N2),dims=(1,2)),dims=(1,2))
     
-            av_u = sum(usi,dims=6)*(1/N)
-            av_z = sum(zsi,dims=4)*(1/N)
-            av_y = sum(ysi,dims=4)*(1/N)
+    for i in 1:2
+        usi = us_list[i]
+        zsi = zs_list[i]
+        ysi = ys_list[i]
+        p_i = p_list[i]
+        qi = q_list[i]
+        av_u = sum(usi,dims=6)*(1/Ns[i])
+        av_z = sum(zsi,dims=4)*(1/Ns[i])
+        av_y = sum(ysi,dims=4)*(1/Ns[i])
+        
+        for k in 1:savepoints
+            clmax = maximum([maxus[k],maxus2[k]])
+    
+
             if i==1
-                legend=false
-                ylabel = string("t=", string(round(savetimes[k], digits=2)))
+                title = string("t=", string(round(savetimes[k], digits=2)))
             else
-                legend=true
-                ylabel=""
+                title=""
             end
 
             if k==1
                 if i==1
-                    title = "ABM"
+                    ylabel= "ABM"
                 else
-                    title = "PDE"
+                    ylabel = "PDE"
                 end
             else
-                title=""
+                ylabel=""
             end
             
             subp = PDEplotsingle(av_u[:,:,:,:,k], av_z[:,:,k], av_y[:,:,k], (p_i,qi),savetimes[k]; save=false, name=name, clim=(0,clmax),title=title,ylabel=ylabel)
@@ -306,13 +387,14 @@ function plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q2), tmax; 
 
         end
     end
-    gridp = plot(plot_array..., layout=(savepoints,2),size=(95*6,savepoints*27*6),link=:all)
+    gridp = plot(plot_array..., layout=(2,savepoints),size=(95*12,27*3*savepoints),link=:all)
     #share axis
-    for k=1:savepoints
-        plot!(gridp[2k],yformatter=_->"")
- 
+    for k=1:savepoints*2
+        if k%savepoints!=1
+            plot!(gridp[k],yformatter=_->"")
+        end
     end
-    for k=1:2*savepoints-2
+    for k=1:savepoints
         plot!(gridp[k],xformatter=_->"")
     end
 

@@ -81,7 +81,7 @@ end
 
 function runensembles(N; NT=200, tmax=2., savepoints = 5, q=parameters(),sigma=0.1,save=true)
     # pde
-    us, zs, ys, (p,q)= PDEsolveensemble(tmax, N;savepoints=savepoints, q=q,save=save)
+    us, zs, ys, (p,q)= PDEsolveensemble(tmax, 1;savepoints=savepoints, q=q,save=save)
     # abm
     us2, zs2, ys2, (p2,q2) = ABMsolveensemble(NT,N; savepoints=savepoints, q=q,sigma=sigma,save=save)
     plotensemblesnapshots(us, zs, ys, (p,q), us2, zs2, ys2, (p2,q), tmax; name="4inf",save=save)

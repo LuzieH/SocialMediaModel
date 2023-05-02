@@ -162,7 +162,7 @@ end
 
 function constructinitial(init,(p,q))
     if init=="4inf"
-        uzy0,  controlled_inf,controlled_med = randominit((p,q))
+        uzy0,  controlled_inf,controlled_med = uniforminit((p,q))
     elseif init =="uniform"
         uzy0, controlled_inf,controlled_med = uniforminit((p,q))
     end
@@ -283,7 +283,7 @@ function PDEsolve(tmax=0.1; alg=nothing, init="4inf", p = PDEconstruct(), q= par
 end
 
 
-function PDEsolveplot(; tmax=2.0, ts = [0. 0.1 0.4 1.2 2.0], alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
+function PDEsolveplot(; tmax=2.0, ts = [0. 0.1 0.4 1.0 1.5 2.0], alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
     sol,(p,q) = PDEsolve(tmax; alg=alg, init=init, p=p, q=q)
     PDEplotsnapshots(sol, (p,q), ts;  name=init,save=save)
  
