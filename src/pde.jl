@@ -85,7 +85,6 @@ function centered_difference((N_x,N_y), (dx, dy))
 end
 
 
-
 function uniforminit((p,q))
     (; N_x , N_y,dV, domain, dx) = p
     (; J) = q
@@ -216,7 +215,7 @@ function f(duzy,uzy,(p,q),t)
 
             a_AB_BAT!(dif, D, M, rho)
 
-            #balance fluxes at boundary (part of boundady conditions)
+            #balance fluxes at boundary (part of boundary conditions)
             dif[1,:]+= -D/dx * (rhoforce[1,:,1])
             dif[end,:]+= D/dx * (rhoforce[end,:,1])
             dif[:,1]+= -D/dy * (rhoforce[:,1,2])
@@ -224,7 +223,7 @@ function f(duzy,uzy,(p,q),t)
 
             drho .=  dif .- dive .+ reac
 
-
+            # note: missing boundary conditions for influencer and media movement
             if controlled_inf[j] == 0
                 mean_rhoj = 1/m_j[j] * dV*reshape(rhosum_j[:,:,:,j],1,N)*grid_points
                 dyj .= 1/(frictionI) * (mean_rhoj' - yj)

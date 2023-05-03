@@ -3,3 +3,4 @@ data
 .vscode
 sbatch
 slurm.md
+src/spacetimeclustering.jl
