@@ -20,9 +20,9 @@ function ABMinit((p,q))
     push!(xI,  intersect(findall(x-> x<=0,x[:,1]), findall(x-> x<=0,x[:,2]))) 
 
     #network between individuals and influencers
-    fol=zeros(n, J)
+    folinf=zeros(n, J)
     for i in 1:J
-        fol[xI[i],i] .=1
+        folinf[xI[i],i] .=1
     end
 
     #initial opinions of influencers
@@ -40,7 +40,7 @@ function ABMinit((p,q))
     #initialization of interaction network between individuals
     Net = ones(n,n)  # everyone connected to everyone including self-connections
 
-    return x, media, inf, fol, state, Net
+    return x, media, inf, folinf, state, Net
 end
 
 function attraction(x, Net)
@@ -61,12 +61,11 @@ function attraction(x, Net)
             end
             force[j,:] = fi/w_sum
         end
-    
     end
     return force
 end
 
-function influence(x,media,inf,fol,state,(p,q))
+function influence(x,media,inf,folinf,state,(p,q))
     (; n, b, c, J) = q
     force1 =zeros(size(x))
     force2 =zeros(size(x))
@@ -78,7 +77,7 @@ function influence(x,media,inf,fol,state,(p,q))
         end
 
         for k in 1:J
-            if fol[j,k]==1
+            if folinf[j,k]==1
                 force2[j,:]=inf[k,:] -x[j,:]
             end
         end
@@ -87,19 +86,19 @@ function influence(x,media,inf,fol,state,(p,q))
     return force
 end
 
-function changeinfluencer(state,x,fol,inf,(p,q))
-    (;   eta, n, J) =q
+function changeinfluencer(state,x,folinf,inf,(p,q))
+    (; eta, n, J) =q
     dt = p.dt
     
-    theta =0.1 #threshold for discrete g-function
+    theta =0.1 # threshold for r-function
     
-    # compute happiness = fraction of followers with same state
+    # compute structural similiarity = fraction of followers with same state
     fraction = zeros(J)
     for i=1:J
-        fraction[i]= sum(fol[:,i].*state)/sum(fol[:,i])
+        fraction[i]= sum(folinf[:,i].*state)/sum(folinf[:,i])
     end
     
-    #ompute distance of followers to influencers
+    # compute distance of followers to influencers
     dist = zeros(n, J)
     for i=1:J
         for j=1:n
@@ -128,35 +127,35 @@ function changeinfluencer(state,x,fol,inf,(p,q))
             while sum(p[1:k])<r2
                 k=k+1
             end
-            fol[j,:]=zeros(J)      
-            fol[j,k]=1
+            folinf[j,:]=zeros(J)      
+            folinf[j,k]=1
         end
     end
 
-    return fol
+    return folinf
 end
 
 
 """Simulate the ABM """
 function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",chosenseed=0)
     Random.seed!(chosenseed)
-    (; dt, domain) = p
-    (;n, n_media, J, sigma, sigmahat, sigmatilde, a,  frictionI, frictionM) =q
+    (;dt, domain) = p
+    (;n, n_media, J, sigma, sigmahat, sigmatilde, a,  frictionI, frictionM) = q
 
-    x, media, inf, fol, state,Net  = ABMinit((p,q))
+    x, media, inf, folinf, state, Net  = ABMinit((p,q))
 
-    xs = [copy(x)] 
-    infs = [copy(inf)]
-    meds = [copy(media)]
-    xinfs = [copy(fol) * collect(1:J)]
+    xs = [copy(x)] # list of opinions of individuals in time
+    infs = [copy(inf)] # list of opinions of influencers in time
+    meds = [copy(media)] # list of opinions of media in time
+    xinfs = [copy(folinf) * collect(1:J)] # list of which influencer an individual follows in time
 
     for k in 2:NT+1
         xold = x
 
-        # opinions change due to opinions of friends, influencers and media
-        attforce= attraction(xold,Net)
-        leader_force= influence(xold,media,inf,fol,state,(p,q))
-        force = a * attforce + leader_force
+        # opinions change due to interaction with opinions of friends, influencers and media
+        attforce = attraction(xold,Net)
+        leaderforce = influence(xold,media,inf,folinf,state,(p,q))
+        force = a * attforce + leaderforce
         x = xold + dt*force + sqrt(dt)*sigma*randn(n,2); 
 
         # dont allow agents to escape domain
@@ -166,17 +165,15 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         x[ind2] .= -2
 
         # influencer opinions adapt slowly to opinions of followers with friction
-        # depending on number of followers
         masscenter=zeros(J,2)
         for i in 1:J
-            if sum(fol[:,i])>0 
-                masscenter[i,:] =sum(fol[:,i] .* x, dims = 1) /sum(fol[:,i])
+            if sum(folinf[:,i])>0 
+                masscenter[i,:] =sum(folinf[:,i] .* x, dims = 1) /sum(folinf[:,i])
                 inf[i,:] =  inf[i,:]  + dt/frictionI * (masscenter[i,:]-inf[i,:]) + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1)
             end
         end
         
         # media opinions change very slowly based on opinions of followers with friction
-        # depending on number of followers
         masscenter=zeros(n_media,2)
         states = [-1, 1]
         for i in 1:n_media
@@ -197,29 +194,21 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
 
         # individual may jump from one influencer to another
         # jumps according to rate model
-        fol = changeinfluencer(state,xold,fol,inf,(p,q))
+        folinf = changeinfluencer(state,xold,folinf,inf,(p,q))
 
         xs = push!(xs,copy(x))
         infs = push!(infs, copy(inf))
         meds = push!(meds, copy(media))
-        xinfs = push!(xinfs, copy(fol * collect(1:J)))
+        xinfs = push!(xinfs, copy(folinf * collect(1:J)))
     end
 
     return xs, xinfs, infs, meds, state, (p,q)
 
 end
 
-function ABMsolveplot(;NT = 200, ts = [1 11 41 101 151 201],  p = ABMconstruct(), q=parameters(), init="4inf", save=true,seed=0)
+function ABMsolveplot(;NT = 200, ts = [1 11 51 101 151 201],  p = ABMconstruct(), q=parameters(), init="4inf", save=true,seed=0)
     @time xs, xinfs, infs, meds, state, (p,q) = ABMsolve(NT;  p=p, q=q, init=init,chosenseed=seed)
     ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; name=init,save=save)
     ABMplotfollowernumbers(xinfs,state,(p,q))
     return xs, xinfs, infs, meds, state, (p,q)
 end
-
-
-#good experiments for appendix
-#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infstrongc",q=parameters(a=1,b=1,c=3))
-#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infstronga",q=parameters(a=3,b=1,c=1))
-#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infweakgamma2.5",q=parameters(frictionI=2.5))
-#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infweakgamma1",q=parameters(frictionI=1))
-#ABMsolveplot(NT=200,ts=[1 11 51 101 151 201],init="4infweakgamma2.5noise",q=parameters(sigmahat=1,frictionI=2.5),seed=3)

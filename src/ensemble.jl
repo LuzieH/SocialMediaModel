@@ -44,7 +44,12 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, init="4inf", p = ABMcons
 
     end
     if save==true
-        @save string("data/abm_ensemble_",init,".jld2") us zs ys (p,q)
+        us2 = us;
+        zs2 = zs;
+        ys2 = ys;
+        p2 = p;
+        q2 = q;
+        @save string("data/abm_ensemble_",init,".jld2") us2 zs2 ys2 p2 q2
     end
     return us, zs, ys, (p,q)
 end
@@ -73,7 +78,8 @@ function PDEsolveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, init="4in
 
     end
     if save==true
-        @save string("data/pde_ensemble_",init,".jld2") us zs ys P
+        (p,q)=P
+        @save string("data/pde_ensemble_",init,".jld2") us zs ys p q
     end
     return us, zs, ys, P
 end
