@@ -22,7 +22,8 @@ function generate_K(grid_points)
     return k, w
 end
 
-function g(x) 
+"""recommender system function"""
+function r(x) 
     if x>0.1
         return x
     else
@@ -30,6 +31,7 @@ function g(x)
     end
 end
 
+"""rate function"""
 function gamma(grid_points, rho, y, eta,dV)
     Nx, Ny, I, J = size(rho)
     rate = zeros((Nx*Ny, I, J, J))
@@ -38,7 +40,7 @@ function gamma(grid_points, rho, y, eta,dV)
 
     for i in 1:I, j in 1:J, j2 in 1:J
         j == j2 && continue
-        @views @. rate[:,i,j,j2] = eta * exp.(-dists[:, j2]) * g((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
+        @views @. rate[:,i,j,j2] = eta * exp.(-dists[:, j2]) * r((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
     end
 
     return reshape(rate,(Nx, Ny, I, J, J))
@@ -164,6 +166,8 @@ function constructinitial(init,(p,q))
         uzy0,  controlled_inf,controlled_med = uniforminit((p,q))
     elseif init =="uniform"
         uzy0, controlled_inf,controlled_med = uniforminit((p,q))
+    elseif init == "random"
+        uzy0, controlled_inf,controlled_med = randominit((p,q))
     end
     q = (; q..., controlled_inf,controlled_med)
     return uzy0, q
@@ -200,20 +204,22 @@ function f(duzy,uzy,(p,q),t)
             yj = @view y2[:,j]
             dyj = @view dy2[:,j]
 
+            # divergence term
             rhoforce .= a .* Fagent .+ b .* follower_force(yj, grid_points, N_x, N_y) .+ c .* follower_force(zi, grid_points, N_x, N_y)
             rhoforce .= rho .* rhoforce
+            @views mul!(dive, C, rhoforce[:,:,1]) # dive = C* rhoforce[:,:,1] (matrix-matrix product)
+            @views mul!(dive, rhoforce[:,:,2], C', 1, 1) # dive = rhoforce[:,:,2] * C' + dive
 
-            @views mul!(dive, C, rhoforce[:,:,1])
-            @views mul!(dive, rhoforce[:,:,2], C', 1, 1)
-
+            # reaction term
             reac .= 0
             for j2=1:J
                 if j2!= j
-                    @. @views reac += -rate_matrix[:,:,i,j,j2] .* rho + rate_matrix[:,:,i,j2,j] .* u[:,:,i,j2]
+                    @. @views reac += -rate_matrix[:,:,i,j,j2] * rho + rate_matrix[:,:,i,j2,j] * u[:,:,i,j2]
                 end
             end
-
-            a_AB_BAT!(dif, D, M, rho)
+            
+            # diffusion term
+            a_AB_BAT!(dif, D, M, rho) # inplace dif = D*(M*rho + rho*M')
 
             #balance fluxes at boundary (part of boundary conditions)
             dif[1,:]+= -D/dx * (rhoforce[1,:,1])
