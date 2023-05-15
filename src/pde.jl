@@ -89,7 +89,10 @@ end
 
 function uniforminit((p,q))
     (; N_x , N_y,dV, domain, dx) = p
-    (; L) = q
+    (; L, M) = q
+    @assert M==2
+    @assert L==4
+
     rho_0 = zeros(N_x, N_y, 2, 4)
     mid_y =Int(round(N_y/2))
     mid_x =Int(round(N_x/2))
@@ -119,9 +122,12 @@ end
 gaussian(x, center; sigma=0.1) = 1/(2*pi*sigma^2)* exp(-1/(2*sigma^2)*norm(x-center)^2)
 
 function randominit((p,q))
-    (; N_x , N_y,dV, grid_points) = p
-    (; L, n) = q
-    random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
+    (; N_x , N_y,dV, grid_points,domain) = p
+    (; L, n, M) = q
+    @assert M==2
+    @assert L==4
+
+    random_pos = rand(n,2).*(domain[1,2]-domain[1,1]) .+domain[1,1] # n uniform samples in domain
     rho_0 = zeros(N_x, N_y, 2, L)
     counts = zeros(L,2)
     y0 = zeros(2,L)

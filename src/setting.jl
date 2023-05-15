@@ -1,19 +1,19 @@
 function parameters(;
-        L = 4,  #number of influencers
-        M = 2, #number of media
-        n = 250, #number of agents 
-        eta = 15.0, #rate constant for changing influencer  
-        a = 1., #interaction strength between agents
+        L = 4,  # number of influencers
+        M = 2, # number of media, warning: in some places the code assumes that M=2 and is not generalized
+        n = 250, # number of agents 
+        eta = 15.0, # rate constant for changing influencer  
+        a = 1., # interaction strength between agents
         b = 4., # interaction strength between agents and influencers
         c = 2., # interaction strength between agents and media 
         sigma = 0.5, # noise on individual agents
-        sigmahat = 0., # noise on influencers
-        sigmatilde = 0., # noise on media
+        sigmahat = 0., # noise on influencers, warning: in some places in the code it is assumed that sigmahat=0
+        sigmatilde = 0., # noise on media, warning: in some places in the code it is assumed that sigmatilde=0
         frictionI = 10., # friction for influencers
-        frictionM = 100.,  #friction for media
-        controlspeed1 = sqrt(1.5^2 +1.5^2)/5, #control definition of first influencer or medium
+        frictionM = 100.,  # friction for media
+        controlspeed1 = sqrt(1.5^2 +1.5^2)/5, # control definition of first influencer or medium
         controltarget1 = [1.5 1.5],
-        controlspeed2 = sqrt(1.5^2 +1.5^2)/5, #control definition of another influencer
+        controlspeed2 = sqrt(1.5^2 +1.5^2)/5, # control definition of another influencer
         controltarget2 = [1.5 1.5]
     )
 
@@ -44,9 +44,9 @@ end
 
 function PDEconstruct(;
         # Define the constants for the PDE
-        dx = 0.05, #0.05
+        dx = 0.05,  
         dy = dx,
-        domain = 2.2*[-1 1; -1 1]
+        domain = 2.2*[-1 1; -1 1] # warning: in some places it is assumed that dy=dx and that the domain is square
     )
     N_x = Int(round((domain[1,2]-domain[1,1])/dx+1))
     N_y = Int(round((domain[2,2]-domain[2,1])/dy+1)) #so far only works if N_y = N_x

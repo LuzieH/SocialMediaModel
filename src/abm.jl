@@ -6,12 +6,16 @@ using JLD2
 
 """ create ABM initial conditions """
 function ABMinit((p,q))
-    (; n, L) = q
+    (; n, L, M) = q
+    (; domain) = p
+
+    @assert M == 2 
+    @assert L == 4
 
     # individuals' opinions
-    x = rand(n,2).*4 .-2 
+    x =  rand(n,2).*(domain[1,2]-domain[1,1]) .+domain[1,1]  
     # media opinions
-    media =[-1. -1.; 1. 1.]
+    media =[-1. -1.; 1. 1.]  
     # individuals following different influencers in the different quadrants
     xI = Any[]
     push!(xI,  intersect(findall(x-> x>0,x[:,1]), findall(x-> x>0,x[:,2])))
@@ -19,25 +23,25 @@ function ABMinit((p,q))
     push!(xI,  intersect(findall(x-> x>0,x[:,1]), findall(x-> x<=0,x[:,2])) )
     push!(xI,  intersect(findall(x-> x<=0,x[:,1]), findall(x-> x<=0,x[:,2]))) 
 
-    #network between individuals and influencers
+    # network between individuals and influencers
     folinf=zeros(n, L)
     for i in 1:L
         folinf[xI[i],i] .=1
     end
 
-    #initial opinions of influencers
+    # initial opinions of influencers
     inf = zeros(L,2)
     for i in 1:L
-        inf[i,:] = sum(x[xI[i],:],dims=1)/size(xI[i],1)#+ rand(2)'*0.5
+        inf[i,:] = sum(x[xI[i],:],dims=1)/size(xI[i],1) 
     end
 
     # initial medium per individual, either medium -1 or 1
-    state = (rand(n).>0.5)*2 .-1
+    state = (rand(n).>0.5)*2 .-1 
     xM = Any[]
     push!(xM, findall(x->x==-1, state))
     push!(xM, findall(x->x==1, state))
 
-    #initialization of interaction network between individuals
+    # initialization of interaction network between individuals
     Net = ones(n,n)  # everyone connected to everyone including self-connections
 
     return x, media, inf, folinf, state, Net
