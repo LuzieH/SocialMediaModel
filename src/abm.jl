@@ -209,6 +209,6 @@ end
 function ABMsolveplot(;NT = 200, ts = [1 11 51 101 151 201],  p = ABMconstruct(), q=parameters(), init="4inf", save=true,seed=0)
     @time xs, xinfs, infs, meds, state, (p,q) = ABMsolve(NT;  p=p, q=q, init=init,chosenseed=seed)
     ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; name=init,save=save)
-    ABMplotfollowernumbers(xinfs,state,(p,q))
+    ABMplotfollowernumbers(xinfs,state,(p,q), save=save)
     return xs, xinfs, infs, meds, state, (p,q)
 end
