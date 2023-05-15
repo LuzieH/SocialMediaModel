@@ -8,26 +8,26 @@ function prep(tequil = 5.; p = PDEconstruct(), q= parametersstronginf(), r=param
     # Solve the ODE
     prob1 = ODEProblem(f,uzy0,(0.0,tequil),(p,q1))
     @time sol1 = DifferentialEquations.solve(prob1, dtmin = dtmin, force_dtmin = true, nothing, saveat = 0:savedt:tequil,save_start=true, abstol = atol, reltol = rtol)
-    Jold = q1.J
+    Lold = q1.L
 
     #add new influencer for control
     u,z,y = sol2uyz(sol1,tequil)
     if countercontrol == "no"
-        q2 = merge(q1, (;J=q1.J+1,controlled_inf = [q1.controlled_inf..., 3]))
+        q2 = merge(q1, (;L=q1.L+1,controlled_inf = [q1.controlled_inf..., 3]))
         (;N_x, N_y, grid_points,N) = p
-        J= q2.J
+        L= q2.L
     elseif countercontrol == "inf" #add one influencer to control and one to stubbornly go into corner
-        q2 = merge(q1, (;J=q1.J+2,controlled_inf = [q1.controlled_inf..., 1,3]))
+        q2 = merge(q1, (;L=q1.L+2,controlled_inf = [q1.controlled_inf..., 1,3]))
         (;N_x, N_y, grid_points,N) = p
-        J= q2.J        
+        L= q2.L        
     elseif countercontrol =="med"
-        q2 = merge(q1, (;J=q1.J+1,controlled_inf = [q1.controlled_inf..., 3], controlled_med = [0, 1]))
+        q2 = merge(q1, (;L=q1.L+1,controlled_inf = [q1.controlled_inf..., 3], controlled_med = [0, 1]))
         (;N_x, N_y, grid_points,N) = p
-        J= q2.J        
+        L= q2.L        
     end
 
-    u2 = zeros(N_x, N_y, 2, J)
-    u2[:,:,:,1:Jold] = u
+    u2 = zeros(N_x, N_y, 2, L)
+    u2[:,:,:,1:Lold] = u
     if start =="influencer"
         startlocation = y[:,1]' #position of influencer in right corner
     elseif start =="zero"
@@ -35,22 +35,22 @@ function prep(tequil = 5.; p = PDEconstruct(), q= parametersstronginf(), r=param
     elseif start=="mean"
         startlocation = 1/sum(u2,dims=(1,2,4))[1,1,2,1] * reshape(sum(u2, dims=4)[:,:,2,:],1,N)*grid_points
     end
-    y2 = zeros(2, J)
+    y2 = zeros(2, L)
     if countercontrol == "no"
-        y2[:,1:J-1] = y
+        y2[:,1:L-1] = y
         #TODO maybe make constant speed such that starts and ends within 5. time steps
-        y2[:,J] = startlocation 
+        y2[:,L] = startlocation 
         startlocationmed = nothing 
     elseif countercontrol == "inf" #add one influencer to control and one to stubbornly go into corner
-        y2[:,1:J-2] = y
+        y2[:,1:L-2] = y
         #TODO maybe make constant speed such that starts and ends within 5. time steps
-        y2[:,J-1] = startlocation 
-        y2[:,J] = startlocation   
+        y2[:,L-1] = startlocation 
+        y2[:,L] = startlocation   
         startlocationmed = nothing  
     elseif countercontrol =="med"
-        y2[:,1:J-1] = y
+        y2[:,1:L-1] = y
         #TODO maybe make constant speed such that starts and ends within 5. time steps
-        y2[:,J] = startlocation     
+        y2[:,L] = startlocation     
         startlocationmed = z[:,2]'
     end   
 
@@ -68,7 +68,7 @@ function PDEsolvefixedtargetsfast(ts, targets, startlocation, (p, q), r, uzy0; s
     n_targets = size(targets,2)
     followersum=0.
     speedpenalty=0.
-    J = q.J
+    L = q.L
     if countercontrol !="no"
         stubbornspeed = norm(stubborntarget - startlocation)/ts[end]
         q= merge(q, (;controltarget2 = stubborntarget, controlspeed2 = stubbornspeed))
@@ -95,7 +95,7 @@ function PDEsolvefixedtargetsfast(ts, targets, startlocation, (p, q), r, uzy0; s
         prob = ODEProblem(f,uzy0,(0.0,Dt),(p,q1))
         @time sol = DifferentialEquations.solve(prob, dtmin = dtmin, force_dtmin = true, saveat = 0:savedt:Dt ,save_start=true, abstol = atol, reltol = rtol)
         #check stiff solver solution, how often is solution saved? 
-        followersum += sum([sum(sol(t).x[1][:,:,:,J])/sum(sol(t).x[1]) for t in sol.t])*savedt
+        followersum += sum([sum(sol(t).x[1][:,:,:,L])/sum(sol(t).x[1]) for t in sol.t])*savedt
         speedpenalty +=speed^2*Dt
         #prepare next simulation
         startlocation = target

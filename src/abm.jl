@@ -6,7 +6,7 @@ using JLD2
 
 """ create ABM initial conditions """
 function ABMinit((p,q))
-    (; n, J) = q
+    (; n, L) = q
 
     # individuals' opinions
     x = rand(n,2).*4 .-2 
@@ -20,14 +20,14 @@ function ABMinit((p,q))
     push!(xI,  intersect(findall(x-> x<=0,x[:,1]), findall(x-> x<=0,x[:,2]))) 
 
     #network between individuals and influencers
-    folinf=zeros(n, J)
-    for i in 1:J
+    folinf=zeros(n, L)
+    for i in 1:L
         folinf[xI[i],i] .=1
     end
 
     #initial opinions of influencers
-    inf = zeros(J,2)
-    for i in 1:J
+    inf = zeros(L,2)
+    for i in 1:L
         inf[i,:] = sum(x[xI[i],:],dims=1)/size(xI[i],1)#+ rand(2)'*0.5
     end
 
@@ -52,21 +52,21 @@ function attraction(x, Net)
             force[j,:]=[0 0]
         else
             fi = [0 0]
-            w_sum=0
+            wsum=0
             for i in eachindex(L)
                 d = x[L[i],:]-x[j,:]
                 w = exp(-sqrt(d[1]^2 +d[2]^2))
                 fi = fi + w*d'
-                w_sum = w_sum+w
+                wsum = wsum+w
             end
-            force[j,:] = fi/w_sum
+            force[j,:] = fi/wsum
         end
     end
     return force
 end
 
 function influence(x,media,inf,folinf,state,(p,q))
-    (; n, b, c, J) = q
+    (; n, b, c, L) = q
     force1 =zeros(size(x))
     force2 =zeros(size(x))
     for j in 1:n
@@ -76,7 +76,7 @@ function influence(x,media,inf,folinf,state,(p,q))
             force1[j,:] = media[1,:]-x[j,:]
         end
 
-        for k in 1:J
+        for k in 1:L
             if folinf[j,k]==1
                 force2[j,:]=inf[k,:] -x[j,:]
             end
@@ -87,20 +87,20 @@ function influence(x,media,inf,folinf,state,(p,q))
 end
 
 function changeinfluencer(state,x,folinf,inf,(p,q))
-    (; eta, n, J) =q
+    (; eta, n, L) =q
     dt = p.dt
     
     theta =0.1 # threshold for r-function
     
     # compute structural similiarity = fraction of followers with same state
-    fraction = zeros(J)
-    for i=1:J
+    fraction = zeros(L)
+    for i=1:L
         fraction[i]= sum(folinf[:,i].*state)/sum(folinf[:,i])
     end
     
     # compute distance of followers to influencers
-    dist = zeros(n, J)
-    for i=1:J
+    dist = zeros(n, L)
+    for i=1:L
         for j=1:n
             d = x[j,:]-inf[i,:]
             dist[j,i]= exp(-sqrt(d[1]^2+d[2]^2))
@@ -108,9 +108,9 @@ function changeinfluencer(state,x,folinf,inf,(p,q))
     end
     
     # compute attractiveness of influencer for followers
-    attractive = zeros(n, J)
+    attractive = zeros(n, L)
     for j=1:n
-        for i=1:J
+        for i=1:L
             g2 = state[j]*fraction[i]
             if g2<theta 
                 g2=theta
@@ -127,7 +127,7 @@ function changeinfluencer(state,x,folinf,inf,(p,q))
             while sum(p[1:k])<r2
                 k=k+1
             end
-            folinf[j,:]=zeros(J)      
+            folinf[j,:]=zeros(L)      
             folinf[j,k]=1
         end
     end
@@ -140,23 +140,23 @@ end
 function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",chosenseed=0)
     Random.seed!(chosenseed)
     (;dt, domain) = p
-    (;n, n_media, J, sigma, sigmahat, sigmatilde, a,  frictionI, frictionM) = q
+    (;n, M, L, sigma, sigmahat, sigmatilde, a,  frictionI, frictionM) = q
 
     x, media, inf, folinf, state, Net  = ABMinit((p,q))
 
     xs = [copy(x)] # list of opinions of individuals in time
     infs = [copy(inf)] # list of opinions of influencers in time
     meds = [copy(media)] # list of opinions of media in time
-    xinfs = [copy(folinf) * collect(1:J)] # list of which influencer an individual follows in time
+    xinfs = [copy(folinf) * collect(1:L)] # list of which influencer an individual follows in time
 
     for k in 2:NT+1
         xold = x
 
         # opinions change due to interaction with opinions of friends, influencers and media
-        attforce = attraction(xold,Net)
+        individualforce = attraction(xold,Net)
         leaderforce = influence(xold,media,inf,folinf,state,(p,q))
-        force = a * attforce + leaderforce
-        x = xold + dt*force + sqrt(dt)*sigma*randn(n,2); 
+        totalforce = a * individualforce + leaderforce
+        x = xold + dt*totalforce + sqrt(dt)*sigma*randn(n,2); 
 
         # dont allow agents to escape domain
         ind1 = findall(x->x>domain[1,2],x)
@@ -165,8 +165,8 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         x[ind2] .= -2
 
         # influencer opinions adapt slowly to opinions of followers with friction
-        masscenter=zeros(J,2)
-        for i in 1:J
+        masscenter=zeros(L,2)
+        for i in 1:L
             if sum(folinf[:,i])>0 
                 masscenter[i,:] =sum(folinf[:,i] .* x, dims = 1) /sum(folinf[:,i])
                 inf[i,:] =  inf[i,:]  + dt/frictionI * (masscenter[i,:]-inf[i,:]) + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1)
@@ -174,11 +174,11 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         end
         
         # media opinions change very slowly based on opinions of followers with friction
-        masscenter=zeros(n_media,2)
+        masscenter=zeros(M,2)
         states = [-1, 1]
-        for i in 1:n_media
-            x_M = findall(x->x==states[i], state)
-            masscenter[i,:] = sum(xold[x_M,:], dims=1)/size(x_M,1)
+        for i in 1:M
+            xM = findall(x->x==states[i], state)
+            masscenter[i,:] = sum(xold[xM,:], dims=1)/size(xM,1)
             media[i,:] = media[i,:]  + dt/frictionM * (masscenter[i,:] -media[i,:]) + 1/frictionM * sqrt(dt)*sigmatilde*randn(2,1)
         end
         
@@ -199,7 +199,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         xs = push!(xs,copy(x))
         infs = push!(infs, copy(inf))
         meds = push!(meds, copy(media))
-        xinfs = push!(xinfs, copy(folinf * collect(1:J)))
+        xinfs = push!(xinfs, copy(folinf * collect(1:L)))
     end
 
     return xs, xinfs, infs, meds, state, (p,q)

@@ -1,6 +1,6 @@
 function parameters(;
-        J=4,  #number of influencers
-        n_media = 2, #number of media
+        L = 4,  #number of influencers
+        M = 2, #number of media
         n = 250, #number of agents 
         eta = 15.0, #rate constant for changing influencer  
         a = 1., #interaction strength between agents
@@ -17,7 +17,7 @@ function parameters(;
         controltarget2 = [1.5 1.5]
     )
 
-    q = (; n, J, n_media, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed1,controltarget1, controlspeed2,controltarget2)
+    q = (; n, L, M, frictionM, frictionI, a, b, c, eta, sigma, sigmahat, sigmatilde, controlspeed1,controltarget1, controlspeed2,controltarget2)
     return q
 end
 
@@ -58,10 +58,10 @@ function PDEconstruct(;
     # matrix of K evaluated at gridpoints
     K_matrix, W_matrix  = generate_K(grid_points)
 
-    M = second_derivative((N_x,N_y), (dx, dy))
+    MassM = second_derivative((N_x,N_y), (dx, dy))
     C = centered_difference((N_x,N_y), (dx, dy))
 
-    p = (; grid_points, dx, dy, dV, X, Y, N, N_x, N_y, domain, K_matrix, W_matrix, C,  M)
+    p = (; grid_points, dx, dy, dV, X, Y, N, N_x, N_y, domain, K_matrix, W_matrix, C,  MassM)
 
     return p
 end

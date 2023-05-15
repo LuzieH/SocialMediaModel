@@ -10,14 +10,14 @@ end
 
 function ABMsolveensemble(NT=200, N=10; savepoints = 4, init="4inf", p = ABMconstruct(), q= parameters(),sigma=0.1,save=true)
     (; X, Y, domain, dx, dy) = p
-    (; n, J) = q
+    (; n, L) = q
     x_arr = domain[1,1]:dx:domain[1,2]
     y_arr = domain[2,1]:dy:domain[2,2] 
     N_x = size(x_arr,1)
     N_y = size(y_arr,1)
     zs = zeros(2, 2, savepoints, N)
-    ys = zeros(2, J, savepoints, N)
-    us = zeros(N_x, N_y, 2, J, savepoints, N)
+    ys = zeros(2, L, savepoints, N)
+    us = zeros(N_x, N_y, 2, L, savepoints, N)
     savetimes = Int.(round.(LinRange(1, NT, savepoints)))
     states = [-1 1]
 
@@ -31,7 +31,7 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, init="4inf", p = ABMcons
             inf = infs[t]
             media = meds[t]
             for i in 1:2
-                for j in 1:J
+                for j in 1:L
                     xi  = findall(x-> x==j, xinf)
                     xm = findall(x-> x==states[i], state)
                     choice = intersect(xi, xm)
@@ -57,11 +57,11 @@ end
 
 function PDEsolveensemble(tmax=0.1, N=10; savepoints = 4, alg=nothing, init="4inf", p = PDEconstruct(), q= parameters(),save=true)
     (; N_x, N_y) = p
-    J=q.J
+    L=q.L
 
     zs = zeros(2, 2, savepoints, N)
-    ys = zeros(2, J, savepoints, N)
-    us = zeros(N_x, N_y, 2, J, savepoints,  N)
+    ys = zeros(2, L, savepoints, N)
+    us = zeros(N_x, N_y, 2, L, savepoints,  N)
     savetimes = LinRange(0, tmax, savepoints)
 
     #Threads.@threads

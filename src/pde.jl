@@ -33,17 +33,17 @@ end
 
 """rate function"""
 function gamma(grid_points, rho, y, eta,dV)
-    Nx, Ny, I, J = size(rho)
-    rate = zeros((Nx*Ny, I, J, J))
+    Nx, Ny, M, L = size(rho)
+    rate = zeros((Nx*Ny, M, L,L))
     m = dV*sum(rho, dims=(1,2))[1,1,:,:]
     dists = pairwise(Euclidean(), grid_points', y)
 
-    for i in 1:I, j in 1:J, j2 in 1:J
+    for i in 1:M, j in 1:L, j2 in 1:L
         j == j2 && continue
-        @views @. rate[:,i,j,j2] = eta * exp.(-dists[:, j2]) * r((m[i,j2]-m[mod1(i+1,Int(I)),j2])/(m[i,j2]+m[mod1(i+1,Int(I)),j2]))
+        @views @. rate[:,i,j,j2] = eta * exp.(-dists[:, j2]) * r((m[i,j2]-m[mod1(i+1,Int(M)),j2])/(m[i,j2]+m[mod1(i+1,Int(M)),j2]))
     end
 
-    return reshape(rate,(Nx, Ny, I, J, J))
+    return reshape(rate,(Nx, Ny, M, L,L))
 end
 
 function agent_force(rho, K_matrix, W_matrix,  dV)
@@ -89,7 +89,7 @@ end
 
 function uniforminit((p,q))
     (; N_x , N_y,dV, domain, dx) = p
-    (; J) = q
+    (; L) = q
     rho_0 = zeros(N_x, N_y, 2, 4)
     mid_y =Int(round(N_y/2))
     mid_x =Int(round(N_x/2))
@@ -110,7 +110,7 @@ function uniforminit((p,q))
     y1_0 = [1.,1. ]
 
     y0 = [y1_0  y2_0 y3_0 y4_0]
-    controlled_inf = zeros(J)
+    controlled_inf = zeros(L)
     controlled_med = zeros(2)
     return ArrayPartition(u0,z0,y0), controlled_inf, controlled_med
 end
@@ -120,11 +120,11 @@ gaussian(x, center; sigma=0.1) = 1/(2*pi*sigma^2)* exp(-1/(2*sigma^2)*norm(x-cen
 
 function randominit((p,q))
     (; N_x , N_y,dV, grid_points) = p
-    (; J, n) = q
+    (; L, n) = q
     random_pos = rand(n,2).*4 .-2 #n uniform samples in domain
-    rho_0 = zeros(N_x, N_y, 2, J)
-    counts = zeros(J,2)
-    y0 = zeros(2,J)
+    rho_0 = zeros(N_x, N_y, 2, L)
+    counts = zeros(L,2)
+    y0 = zeros(2,L)
 
     function add_agent(agenti, infi, state,  rho_0, counts, y0)
         rho_0[:,:,state,infi]+= reshape([gaussian(grid_points[j,:], random_pos[agenti,:]) for j in 1:N_x*N_y], N_x, N_y)
@@ -156,7 +156,7 @@ function randominit((p,q))
     z1_0 = [-1.,-1.]
     z0 = [z1_0  z2_0]
     y0= y0./dropdims(sum(counts, dims=2), dims=2)'
-    controlled_inf = zeros(J)
+    controlled_inf = zeros(L)
     controlled_med = zeros(2)
     return ArrayPartition(u0,z0,y0),  controlled_inf,controlled_med
 end
@@ -176,8 +176,8 @@ end
 
 function f(duzy,uzy,(p,q),t)
     yield()
-    (; a, b, c, sigma, eta,  J, frictionM, frictionI, controlled_inf, controlled_med,controlspeed1,controltarget1, controlspeed2,controltarget2) = q
-    (; grid_points, N_x, N_y,N, K_matrix, W_matrix, dx,dy, dV, C,  M) = p
+    (; a, b, c, sigma, eta,  L, frictionM, frictionI, controlled_inf, controlled_med,controlspeed1,controltarget1, controlspeed2,controltarget2) = q
+    (; grid_points, N_x, N_y,N, K_matrix, W_matrix, dx,dy, dV, C,  MassM) = p
     
     D = sigma^2 * 0.5
     u, z, y2 = uzy.x
@@ -196,7 +196,7 @@ function f(duzy,uzy,(p,q),t)
     dive = similar(reac)
     rhoforce = zeros(N_x, N_y, 2)
     for i in 1:2
-        for j in 1:J
+        for j in 1:L
             rho = @view  u[:,:,i,j]
             drho = @view du[:,:,i,j]
             zi = @view z[:,i]
@@ -212,14 +212,14 @@ function f(duzy,uzy,(p,q),t)
 
             # reaction term
             reac .= 0
-            for j2=1:J
+            for j2=1:L
                 if j2!= j
                     @. @views reac += -rate_matrix[:,:,i,j,j2] * rho + rate_matrix[:,:,i,j2,j] * u[:,:,i,j2]
                 end
             end
             
             # diffusion term
-            a_AB_BAT!(dif, D, M, rho) # inplace dif = D*(M*rho + rho*M')
+            a_AB_BAT!(dif, D, MassM, rho) # inplace dif = D*(M*rho + rho*M')
 
             #balance fluxes at boundary (part of boundary conditions)
             dif[1,:]+= -D/dx * (rhoforce[1,:,1])

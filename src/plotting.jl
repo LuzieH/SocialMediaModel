@@ -18,7 +18,7 @@ color_noinf = :white
 function PDEplotsingle(u,z,y,(p,q),t; save=true, name="4inf", clim=(0,Inf), ylabel="", title = string("t=", string(round(t, digits=2))))
     (; domain, dx, dy) = p
     (;controlled_inf, controlled_med) = q #this only works for controlled scenario!
-    J= q.J
+    L= q.L
 
 
     x_arr = domain[1,1]:dx:domain[1,2]
@@ -37,7 +37,7 @@ function PDEplotsingle(u,z,y,(p,q),t; save=true, name="4inf", clim=(0,Inf), ylab
     end
 
 
-    for j in 1:J
+    for j in 1:L
         if controlled_inf[j]==0
             scatter!(subp, [y[1,j]], [y[2,j]], markercolor=colors_leaders[1],markersize=size_leaders_pde)
         elseif controlled_inf[j]==1
@@ -206,7 +206,7 @@ end
 
 function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim=(-Inf, Inf),color_agents=false,sigma=0.1,kde =true)
     (;X, Y, domain, dx, dy) = p
-    (;J) = q
+    (;L) = q
     n= q.n
 
     x_arr = domain[1,1]:dx:domain[1,2]
@@ -221,12 +221,12 @@ function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim
         scatter!(subp, centers[:,1], centers[:,2], markercolor=color_noinf,markersize=size_individuals, markerstrokewidth=0.5)
     else
         states = [-1 1]
-        for j in 1:J
+        for j in 1:L
             for i in 1:2
                 xi  = findall(x-> x==j, xinf)
                 xm = findall(x-> x==states[i], state)
                 choice = intersect(xi, xm)
-                if J>1
+                if L>1
                     scatter!(subp, centers[choice,1], centers[choice,2], markercolor=colors_followers[j],markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.5)
                 else
                     scatter!(subp, centers[choice,1], centers[choice,2], markercolor=color_noinf,markershape=markers_readers[i], markersize=size_individuals, markerstrokewidth=0.5)
@@ -235,7 +235,7 @@ function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim
         end
     end
     
-    for j in 1:J
+    for j in 1:L
         scatter!(subp, [inf[1,j]], [inf[2,j]], markercolor=colors_followers[j],markersize=size_leaders,markerstrokewidth=1.5)
     end
 
@@ -283,14 +283,14 @@ end
 
 function ABMplotfollowernumbers(xinfs,state,(p,q);save=true,name="4inf")
     N = size(xinfs,1) #number of timesteps
-    (; J,n) = q
+    (; L,n) = q
     (;dt) = p
     states = [-1 1]
-    numbers = zeros(N,2,J)
+    numbers = zeros(N,2,L)
     scolors = Any[]
     alphas = Any[]
     labels = Any[]
-    for j in 1:J
+    for j in 1:L
         for i=1:2
             xm = findall(x-> x==states[i], state)
             for n in 1:N
@@ -304,10 +304,10 @@ function ABMplotfollowernumbers(xinfs,state,(p,q);save=true,name="4inf")
             push!(scolors, colors_followers[j])
         end
     end
-    props = (1/n)*reshape(numbers,(N, J*2))
+    props = (1/n)*reshape(numbers,(N, L*2))
 
     subp = areaplot(dt*collect(1:N), props, seriescolor = permutedims(scolors), fillalpha = permutedims(alphas),title="Proportion of followers",labels = permutedims(labels),size=(95*5,60*5),xlabel="t",legend=false)
-    for j in 1:J
+    for j in 1:L
         for i in 1:2
             scatter!(subp, [0.05], [sum(props[5,1:2*(j-1) + i])-0.5*props[5,2*(j-1) + i]], markercolor=colors_followers[j],markershape=markers_readers[i],markersize=1.5*size_individuals,legend=false)
         end
