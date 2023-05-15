@@ -204,7 +204,7 @@ end
 
 ### ABM
 
-function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim=(-Inf, Inf),color_agents=false,sigma=0.1,kde =true)
+function ABMplotsingle(centers, inf, media, state, stateinf, (p,q); title = "", clim=(-Inf, Inf),color_agents=false,sigma=0.1,kde =true)
     (;X, Y, domain, dx, dy) = p
     (;L) = q
     n= q.n
@@ -223,7 +223,7 @@ function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim
         states = [-1 1]
         for j in 1:L
             for i in 1:2
-                xi  = findall(x-> x==j, xinf)
+                xi  = findall(x-> x==j, stateinf)
                 xm = findall(x-> x==states[i], state)
                 choice = intersect(xi, xm)
                 if L>1
@@ -245,7 +245,7 @@ function ABMplotsingle(centers, inf, media, state, xinf, (p,q); title = "", clim
     return subp
 end
 
-function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, name="4inf",sigma=0.1,kde=false)
+function ABMplotsnapshots(xs, stateinfs, infs, meds, state, (p,q), ts; save = true, name="4inf",sigma=0.1,kde=false)
     (;dt) = p
     n_snapshots = length(ts)
     if n_snapshots%2!=0
@@ -257,9 +257,9 @@ function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, 
         x=xs[t]
         inf=infs[t]
         media=meds[t]
-        xinf = xinfs[t]
+        stateinf = stateinfs[t]
         title =string("t = ", string(round((t-1)*dt, digits=2)))
-        subp= ABMplotsingle(x, inf', media', state, xinf, (p,q),  clim=(0,0.5),color_agents=true,sigma=sigma,title=title,kde=kde)
+        subp= ABMplotsingle(x, inf', media', state, stateinf, (p,q),  clim=(0,0.5),color_agents=true,sigma=sigma,title=title,kde=kde)
         push!(plot_array, subp)
     end    
     gridp=plot(plot_array..., layout=n_snapshots,size=(n_snapshots/2*300,2*300),link=:all)
@@ -281,8 +281,8 @@ function ABMplotsnapshots(xs, xinfs, infs, meds, state, (p,q), ts; save = true, 
 end
 
 
-function ABMplotfollowernumbers(xinfs,state,(p,q);save=true,name="4inf")
-    N = size(xinfs,1) #number of timesteps
+function ABMplotfollowernumbers(stateinfs,state,(p,q);save=true,name="4inf")
+    N = size(stateinfs,1) #number of timesteps
     (; L,n) = q
     (;dt) = p
     states = [-1 1]
@@ -294,8 +294,8 @@ function ABMplotfollowernumbers(xinfs,state,(p,q);save=true,name="4inf")
         for i=1:2
             xm = findall(x-> x==states[i], state)
             for n in 1:N
-                xinf = xinfs[n]
-                xi  = findall(x-> x==j, xinf)
+                stateinf = stateinfs[n]
+                xi  = findall(x-> x==j, stateinf)
                 
                 choice = intersect(xi, xm)
                 numbers[n,i,j] = size(choice,1)
@@ -319,12 +319,12 @@ function ABMplotfollowernumbers(xinfs,state,(p,q);save=true,name="4inf")
 end
 
 
-function ABMgifsingle(xs, xinfs, state, infs, meds, (p,q); save=true, dN=5, name="4inf")
+function ABMgifsingle(xs, stateinfs, state, infs, meds, (p,q); save=true, dN=5, name="4inf")
     NT=size(xs,1)
     (;dt) = p
 
     abmgif = @animate for t = 1:dN:NT
-        subp = ABMplotsingle(xs[t], infs[t]', meds[t]',state,xinfs[t], (p,q), title = string("t = ", string(round((t-1)*dt, digits=2))),color_agents=true)
+        subp = ABMplotsingle(xs[t], infs[t]', meds[t]',state,stateinfs[t], (p,q), title = string("t = ", string(round((t-1)*dt, digits=2))),color_agents=true)
         plot(subp)
     end
     if save==true

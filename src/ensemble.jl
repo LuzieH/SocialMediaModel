@@ -22,17 +22,17 @@ function ABMsolveensemble(NT=200, N=10; savepoints = 4, init="4inf", p = ABMcons
     states = [-1 1]
 
     for k=1:N
-        xs, xinfs, infs, meds, state, _ = ABMsolve(NT;  p=p, q=q, init=init,chosenseed=k)
+        xs, stateinfs, infs, meds, state, _ = ABMsolve(NT;  p=p, q=q, init=init,chosenseed=k)
 
         for m in 1:savepoints
             t = savetimes[m]
             x = xs[t]
-            xinf = xinfs[t]
+            stateinf = stateinfs[t]
             inf = infs[t]
             media = meds[t]
             for i in 1:2
                 for j in 1:L
-                    xi  = findall(x-> x==j, xinf)
+                    xi  = findall(x-> x==j, stateinf)
                     xm = findall(x-> x==states[i], state)
                     choice = intersect(xi, xm)
                     us[:,:,i,j,m,k] = [(1/n)*sumgaussian([X[i,j], Y[i,j]], x[choice,:],sigma=sigma) for i in 1:size(X,1), j in 1:size(X,2)]
