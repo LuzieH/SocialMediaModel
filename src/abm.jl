@@ -175,14 +175,11 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         totalforce = a * individualforce + leaderforce
         x = xold + dt*totalforce + sqrt(dt)*sigma*randn(n,2); 
 
-        # apply reflective boundary conditions
-        boundaryconditions(x,domain)
-
         # influencer opinions adapt slowly to opinions of followers with friction
         masscenter=zeros(L,2)
         for i in 1:L
             if sum(FolInfNet[:,i])>0 
-                masscenter[i,:] =sum(FolInfNet[:,i] .* x, dims = 1) /sum(FolInfNet[:,i])
+                masscenter[i,:] =sum(FolInfNet[:,i] .* xold, dims = 1) /sum(FolInfNet[:,i])
                 inf[i,:] =  inf[i,:]  + dt/frictionI * (masscenter[i,:]-inf[i,:]) + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1)
             end
         end
@@ -197,6 +194,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         end
         
         # apply reflective boundary conditions
+        boundaryconditions(x,domain)
         boundaryconditions(inf,domain)
         boundaryconditions(media,domain)
 
