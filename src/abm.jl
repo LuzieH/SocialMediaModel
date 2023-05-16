@@ -194,9 +194,9 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         end
         
         # apply reflective boundary conditions
-        boundaryconditions(x,domain)
-        boundaryconditions(inf,domain)
-        boundaryconditions(media,domain)
+        x = boundaryconditions(x,domain)
+        x = boundaryconditions(inf,domain)
+        x = boundaryconditions(media,domain)
 
         # individual may jump from one influencer to another
         # jumps according to rate model
