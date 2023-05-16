@@ -51,14 +51,14 @@ function attraction(x, IndNet)
     n = size(IndNet, 1)
     force = zeros(n,2)
     for j in 1:n
-        L=findall(x->x==1, IndNet[j,:])
-        if isempty(L)
+        Neighb=findall(x->x==1, IndNet[j,:])
+        if isempty(Neighb)
             force[j,:]=[0 0]
         else
             fi = [0 0]
             wsum=0
-            for i in eachindex(L)
-                d = x[L[i],:]-x[j,:]
+            for i in eachindex(Neighb)
+                d = x[Neighb[i],:]-x[j,:]
                 w = exp(-sqrt(d[1]^2 +d[2]^2))
                 fi = fi + w*d'
                 wsum = wsum+w
@@ -195,8 +195,8 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         
         # apply reflective boundary conditions
         x = boundaryconditions(x,domain)
-        x = boundaryconditions(inf,domain)
-        x = boundaryconditions(media,domain)
+        inf = boundaryconditions(inf,domain)
+        media = boundaryconditions(media,domain)
 
         # individual may jump from one influencer to another
         # jumps according to rate model
