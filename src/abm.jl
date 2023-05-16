@@ -37,9 +37,6 @@ function ABMinit((p,q))
 
     # initial medium per individual, either medium -1 or 1
     state = (rand(n).>0.5)*2 .-1 
-    xM = Any[]
-    push!(xM, findall(x->x==-1, state))
-    push!(xM, findall(x->x==1, state))
 
     # initialization of interaction network between individuals
     IndNet = ones(n,n)  # everyone connected to everyone including self-connections
@@ -175,12 +172,15 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         totalforce = a * individualforce + leaderforce
         x = xold + dt*totalforce + sqrt(dt)*sigma*randn(n,2); 
 
+        infold = inf
         # influencer opinions adapt slowly to opinions of followers with friction
         masscenter=zeros(L,2)
         for i in 1:L
             if sum(FolInfNet[:,i])>0 
-                masscenter[i,:] =sum(FolInfNet[:,i] .* xold, dims = 1) /sum(FolInfNet[:,i])
-                inf[i,:] =  inf[i,:]  + dt/frictionI * (masscenter[i,:]-inf[i,:]) + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1)
+                masscenter[i,:] =sum(FolInfNet[:,i] .* xold, dims = 1) /sum(FolInfNet[:,i])    
+                inf[i,:] =  inf[i,:] + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1) + dt/frictionI * (masscenter[i,:]-inf[i,:])
+            else
+                inf[i,:] =  inf[i,:] +  dt/frictionI * (masscenter[i,:]-inf[i,:])
             end
         end
         
@@ -189,8 +189,12 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         states = [-1, 1]
         for i in 1:M
             xM = findall(x->x==states[i], state)
-            masscenter[i,:] = sum(xold[xM,:], dims=1)/size(xM,1)
-            media[i,:] = media[i,:]  + dt/frictionM * (masscenter[i,:] -media[i,:]) + 1/frictionM * sqrt(dt)*sigmatilde*randn(2,1)
+            if size(xM,1)>0
+                masscenter[i,:] = sum(xold[xM,:], dims=1)/size(xM,1)
+                media[i,:] = media[i,:]  + dt/frictionM * (masscenter[i,:] -media[i,:]) + 1/frictionM * sqrt(dt)*sigmatilde*randn(2,1)
+            else
+                media[i,:] = media[i,:]  + 1/frictionM * sqrt(dt)*sigmatilde*randn(2,1)
+            end
         end
         
         # apply reflective boundary conditions
@@ -200,7 +204,7 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
 
         # individual may jump from one influencer to another
         # jumps according to rate model
-        FolInfNet = changeinfluencer(state,xold,FolInfNet,inf,(p,q))
+        FolInfNet = changeinfluencer(state,xold,FolInfNet,infold,(p,q))
 
         xs = push!(xs,copy(x))
         infs = push!(infs, copy(inf))
