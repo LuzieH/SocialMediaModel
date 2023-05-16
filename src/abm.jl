@@ -178,9 +178,9 @@ function ABMsolve(NT = 100;  p = ABMconstruct(), q=parameters(), init="4inf",cho
         for i in 1:L
             if sum(FolInfNet[:,i])>0 
                 masscenter[i,:] =sum(FolInfNet[:,i] .* xold, dims = 1) /sum(FolInfNet[:,i])    
-                inf[i,:] =  inf[i,:] + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1) + dt/frictionI * (masscenter[i,:]-inf[i,:])
+                inf[i,:] =  inf[i,:] + dt/frictionI * (masscenter[i,:]-inf[i,:]) + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1) 
             else
-                inf[i,:] =  inf[i,:] +  dt/frictionI * (masscenter[i,:]-inf[i,:])
+                inf[i,:] =  inf[i,:] + 1/frictionI*sqrt(dt)*sigmahat*randn(2,1) 
             end
         end
         
