@@ -1,7 +1,7 @@
 # SocialMediaModel
 
 This repository contains the Julia code accompanying the paper 
-["Modelling opinion dynamics under the impact of influencer and media strategies"](https://arxiv.org/abs/2301.13661). 
+["Modelling opinion dynamics under the impact of influencer and media strategies"](https://doi.org/10.1038/s41598-023-46187-9). 
 
 ![](https://github.com/LuzieH/SocialMediaModel/blob/master/img/abm_single_4inf.gif)
 
@@ -20,3 +20,9 @@ To use the package in Julia, it has to be installed with
 and then imported with `using SocialMediaModel`. 
 Most functions are exported, so instead of calling `SocialMediaModel.ABMsolve()`, they can simply be called with `ABMsolve()`. 
 Tests can be run with `runtests()`. 
+
+
+## Citation
+If you use this code in your work, we politely ask you to acknowledge it in your manuscript by citing:
+1. Helfmann, L., Djurdjevac Conrad, N., Lorenz-Spreen, P., & Schütte, C. (2023). Supplementary code for the paper Modelling opinion dynamics under the impact of influencer and media strategies. DOI: 10.12752/9267
+2. Helfmann, L., Djurdjevac Conrad, N., Lorenz-Spreen, P., & Schütte, C. (2023). Modelling opinion dynamics under the impact of influencer and media strategies. Scientific Reports, 13(1), 19375. DOI: 10.1038/s41598-023-46187-9
